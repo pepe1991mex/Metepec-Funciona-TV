@@ -1,0 +1,43 @@
+// Fallback channels when Supabase is unavailable
+export const FALLBACK_CHANNELS = [
+  {
+    id: 'fallback-1',
+    nombre: 'Metepec Noticias',
+    slug: 'metepec-noticias',
+    url_hls: 'https://mdstrm.com/live-stream-playlist/574463697b9817cf0886fc17.m3u8',
+    logo_url: null,
+    categoria: 'Municipal',
+    orden: 1,
+    activo: true,
+  },
+  {
+    id: 'fallback-2',
+    nombre: 'Turismo Metepec',
+    slug: 'turismo-metepec',
+    url_hls: 'https://mdstrm.com/live-stream-playlist/574463697b9817cf0886fc17.m3u8',
+    logo_url: null,
+    categoria: 'Municipal',
+    orden: 2,
+    activo: true,
+  },
+  {
+    id: 'fallback-3',
+    nombre: 'Seguridad',
+    slug: 'seguridad',
+    url_hls: 'https://mdstrm.com/live-stream-playlist/574463697b9817cf0886fc17.m3u8',
+    logo_url: null,
+    categoria: 'Municipal',
+    orden: 3,
+    activo: true,
+  },
+  {
+    id: 'fallback-4',
+    nombre: 'Servicios Publicos',
+    slug: 'servicios-publicos',
+    url_hls: 'https://mdstrm.com/live-stream-playlist/574463697b9817cf0886fc17.m3u8',
+    logo_url: null,
+    categoria: 'Municipal',
+    orden: 4,
+    activo: true,
+  },
+]
