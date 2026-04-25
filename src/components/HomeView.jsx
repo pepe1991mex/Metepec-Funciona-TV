@@ -31,6 +31,11 @@ export default function HomeView({ usuario, onLogout }) {
   const { hero, intermedio, player: playerBanners } = useBanners()
   const [selected, setSelected] = useState(null)
   const [blocked, setBlocked] = useState(false)
+
+  function selectChannel(ch) {
+    setSelected(ch)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const secondsRef = useRef(0)
   const timerRef = useRef(null)
 
@@ -192,7 +197,7 @@ export default function HomeView({ usuario, onLogout }) {
             {/* First row of channels */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {firstRow.map((ch, i) => (
-                <ChannelCard key={ch.id} ch={ch} i={i} selected={selected} onSelect={setSelected} />
+                <ChannelCard key={ch.id} ch={ch} i={i} selected={selected} onSelect={selectChannel} />
               ))}
             </div>
 
@@ -207,7 +212,7 @@ export default function HomeView({ usuario, onLogout }) {
             {restRows.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
                 {restRows.map((ch, i) => (
-                  <ChannelCard key={ch.id} ch={ch} i={i + 4} selected={selected} onSelect={setSelected} />
+                  <ChannelCard key={ch.id} ch={ch} i={i + 4} selected={selected} onSelect={selectChannel} />
                 ))}
               </div>
             )}

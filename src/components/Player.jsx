@@ -4,8 +4,34 @@ import Hls from 'hls.js'
 export default function Player({ channel, onBack }) {
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
+  const containerRef = useRef(null)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const handleFSChange = () => {
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', handleFSChange)
+    document.addEventListener('webkitfullscreenchange', handleFSChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFSChange)
+      document.removeEventListener('webkitfullscreenchange', handleFSChange)
+    }
+  }, [])
+
+  function toggleFullscreen() {
+    const el = containerRef.current
+    if (!el) return
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (el.requestFullscreen) el.requestFullscreen()
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen()
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+    }
+  }
 
   useEffect(() => {
     if (!channel || !videoRef.current) return
@@ -68,7 +94,11 @@ export default function Player({ channel, onBack }) {
         <span className="text-gray-400 text-sm">{channel.nombre}</span>
       </div>
 
-      <div className="relative bg-black rounded-2xl overflow-hidden shadow-lg" style={{ aspectRatio: '16/9' }}>
+      <div
+        ref={containerRef}
+        className="relative bg-black rounded-2xl overflow-hidden shadow-lg"
+        style={{ aspectRatio: isFullscreen ? undefined : '16/9', height: isFullscreen ? '100vh' : undefined }}
+      >
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
@@ -76,6 +106,14 @@ export default function Player({ channel, onBack }) {
           autoPlay
           controls
         />
+
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-3 right-3 bg-black/60 text-white text-xs px-3 py-1 rounded-lg hover:bg-black/80 transition z-10"
+        >
+          {isFullscreen ? '⊡ Reducir' : '⛶ Ampliar'}
+        </button>
 
         {/* Live badge */}
         <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 px-3 py-1 rounded-lg">
