@@ -31,13 +31,38 @@ export default function HomeView({ usuario, onLogout }) {
   const { hero, intermedio, player: playerBanners } = useBanners()
   const [selected, setSelected] = useState(null)
   const [blocked, setBlocked] = useState(false)
+  const secondsRef = useRef(0)
+  const timerRef = useRef(null)
+  const sessionRef = useRef(null)
+
+  async function closeActiveSession() {
+    if (!sessionRef.current) return
+    await supabase.from('sesiones').update({ fin: new Date().toISOString() }).eq('id', sessionRef.current)
+    sessionRef.current = null
+  }
+
+  async function openSession(ch) {
+    await closeActiveSession()
+    const { data } = await supabase.from('sesiones').insert({
+      usuario_id: usuario.id,
+      canal: ch.nombre,
+      inicio: new Date().toISOString(),
+      fin: null,
+      minutos: 0
+    }).select('id').single()
+    if (data) sessionRef.current = data.id
+  }
 
   function selectChannel(ch) {
     setSelected(ch)
     setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 100)
+    openSession(ch)
   }
-  const secondsRef = useRef(0)
-  const timerRef = useRef(null)
+
+  function handleBack() {
+    closeActiveSession()
+    setSelected(null)
+  }
 
   useEffect(() => {
     if (!selected || blocked) return
@@ -61,6 +86,7 @@ export default function HomeView({ usuario, onLogout }) {
             .eq('id', usuario.id)
             .single()
           if (data && data.minutos_consumidos >= data.minutos_limite) {
+            await closeActiveSession()
             setBlocked(true)
             setSelected(null)
           }
@@ -170,7 +196,7 @@ export default function HomeView({ usuario, onLogout }) {
         {/* Player */}
         {selected && (
           <div className="mb-4">
-            <Player channel={selected} onBack={() => setSelected(null)} />
+            <Player channel={selected} onBack={handleBack} />
 
             {/* ═══ BANNER PLAYER — Debajo del reproductor ═══ */}
             {playerBanners.length > 0 && (
