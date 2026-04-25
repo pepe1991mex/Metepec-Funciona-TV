@@ -22,6 +22,12 @@ export default function Player({ channel, onBack }) {
   }, [])
 
   function toggleFullscreen() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    if (isIOS) {
+      const video = videoRef.current
+      if (video && video.webkitEnterFullscreen) video.webkitEnterFullscreen()
+      return
+    }
     const el = containerRef.current
     if (!el) return
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -112,7 +118,7 @@ export default function Player({ channel, onBack }) {
           onClick={toggleFullscreen}
           className="absolute top-3 right-3 bg-black/60 text-white text-xs px-3 py-1 rounded-lg hover:bg-black/80 transition z-10"
         >
-          {isFullscreen ? '⊡ Reducir' : '⛶ Ampliar'}
+          {/iPad|iPhone|iPod/.test(navigator.userAgent) ? '⛶ Ampliar' : isFullscreen ? '⊡ Reducir' : '⛶ Ampliar'}
         </button>
 
         {/* Live badge */}

@@ -34,7 +34,7 @@ export default function HomeView({ usuario, onLogout }) {
 
   function selectChannel(ch) {
     setSelected(ch)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 100)
   }
   const secondsRef = useRef(0)
   const timerRef = useRef(null)
