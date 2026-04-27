@@ -27,13 +27,16 @@ const PILLARS = [
 ]
 
 export default function HomeView({ usuario, onLogout }) {
-  const { channels, loading } = useChannels()
-  const { hero, intermedio, player: playerBanners } = useBanners()
+  const { channels, loading, reload: reloadChannels } = useChannels()
+  const { hero, intermedio, player: playerBanners, reload: reloadBanners } = useBanners()
   const [selected, setSelected] = useState(null)
   const [blocked, setBlocked] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
   const secondsRef = useRef(0)
   const timerRef = useRef(null)
   const sessionRef = useRef(null)
+  const touchStartY = useRef(null)
 
   async function closeActiveSession() {
     if (!sessionRef.current) return
@@ -62,6 +65,27 @@ export default function HomeView({ usuario, onLogout }) {
   function handleBack() {
     closeActiveSession()
     setSelected(null)
+  }
+
+  function handleTouchStart(e) {
+    if (window.scrollY === 0) touchStartY.current = e.touches[0].clientY
+  }
+
+  function handleTouchMove(e) {
+    if (touchStartY.current === null) return
+    if (window.scrollY !== 0) { touchStartY.current = null; return }
+    const dist = e.touches[0].clientY - touchStartY.current
+    if (dist > 0) setPullDistance(Math.min(dist, 120))
+  }
+
+  async function handleTouchEnd() {
+    if (pullDistance > 70) {
+      setRefreshing(true)
+      await Promise.all([reloadChannels(), reloadBanners()])
+      setRefreshing(false)
+    }
+    setPullDistance(0)
+    touchStartY.current = null
   }
 
   useEffect(() => {
@@ -118,9 +142,30 @@ export default function HomeView({ usuario, onLogout }) {
   const restRows = channels.slice(4)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 30 || refreshing) && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '56px', gap: '8px', color: 'white', fontSize: '14px',
+          background: 'rgba(45,79,159,0.92)',
+          opacity: refreshing ? 1 : Math.min(pullDistance / 70, 1),
+          transform: `translateY(${refreshing ? 0 : Math.min(pullDistance - 30, 26)}px)`,
+          transition: refreshing ? 'none' : 'opacity 0.1s',
+        }}>
+          <span className={refreshing ? 'animate-spin-refresh' : ''} style={{ fontSize: '22px', display: 'inline-block' }}>⟳</span>
+          <span>{refreshing ? 'Actualizando...' : pullDistance > 70 ? 'Suelta para actualizar' : 'Desliza para actualizar'}</span>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm"
+        style={{ top: 0, paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
         <div className="h-[3px]" style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
         <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">

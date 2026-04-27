@@ -3,14 +3,11 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  padding-top: env(safe-area-inset-top);
+html {
+  padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
+  padding-top: env(safe-area-inset-top);      /* iOS 11.2+ */
 }
-.sticky-header-fix {
-  padding-top: env(safe-area-inset-top);
-}
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 
@@ -18,3 +15,5 @@ body {
 .animate-pulse-dot { animation: pulse 2s infinite; }
 @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 .animate-ticker { animation: ticker 45s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.animate-spin-refresh { animation: spin 0.8s linear infinite; }
