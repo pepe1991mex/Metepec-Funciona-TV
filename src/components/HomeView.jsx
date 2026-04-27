@@ -120,7 +120,7 @@ export default function HomeView({ usuario, onLogout }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="h-[3px]" style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
         <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">

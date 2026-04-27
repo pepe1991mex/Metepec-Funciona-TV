@@ -3,7 +3,14 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding-top: env(safe-area-inset-top);
+}
+.sticky-header-fix {
+  padding-top: env(safe-area-inset-top);
+}
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 

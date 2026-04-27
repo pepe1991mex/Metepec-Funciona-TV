@@ -210,7 +210,7 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="flex items-center gap-3">
           <img src="/logos/escudo.png" alt="Escudo" className="h-9 object-contain" />
           <div>

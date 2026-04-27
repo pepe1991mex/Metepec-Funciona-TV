@@ -56,7 +56,7 @@ export default function LoginView({ onLogin }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4"
-      style={{ background: 'linear-gradient(135deg, #2D4F9F 0%, #5BC0C4 50%, #92D3F3 100%)' }}>
+      style={{ background: 'linear-gradient(135deg, #2D4F9F 0%, #5BC0C4 50%, #92D3F3 100%)', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm text-center">
         <div className="h-1 rounded-full mb-6 -mt-1"
           style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
