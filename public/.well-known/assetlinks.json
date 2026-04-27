@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.metepec_funciona_tv.twa",
+      "sha256_cert_fingerprints": [
+        "45:BA:D9:83:26:68:CD:22:D2:BD:02:5F:76:E8:58:C8:DF:23:95:CA:4C:95:01:E3:30:9C:E7:3C:DD:0C:93:C4"
+      ]
+    }
+  }
+]
