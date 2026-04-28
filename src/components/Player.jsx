@@ -13,6 +13,7 @@ export default function Player({ channel, onBack, getRandomVideo }) {
   const [prerollVideo, setPrerollVideo] = useState(null)
   const [prerollSkippable, setPrerollSkippable] = useState(false)
   const [prerollCountdown, setPrerollCountdown] = useState(5)
+  const [adBlocked, setAdBlocked] = useState(false)
 
   useEffect(() => {
     const handleFSChange = () => {
@@ -70,12 +71,27 @@ export default function Player({ channel, onBack, getRandomVideo }) {
     }
   }
 
+  // Safari/iOS-safe preroll playback: start muted, unmute after 300ms
+  function playPreroll() {
+    const ad = adVideoRef.current
+    if (!ad) return
+    setAdBlocked(false)
+    ad.muted = true
+    ad.play().then(() => {
+      setTimeout(() => { ad.muted = false }, 300)
+    }).catch(() => {
+      setAdBlocked(true)
+    })
+  }
+
   useEffect(() => {
     if (!channel) return
     setError(false)
     setPlaying(false)
     setPrerollSkippable(false)
     setPrerollCountdown(5)
+    setAdBlocked(false)
+    // Destroy any existing HLS before showing preroll
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
 
     const ad = getRandomVideo ? getRandomVideo(channel.id) : null
@@ -95,7 +111,7 @@ export default function Player({ channel, onBack, getRandomVideo }) {
 
   useEffect(() => {
     if (showingPreroll && adVideoRef.current) {
-      adVideoRef.current.play().catch(() => {})
+      playPreroll()
     }
   }, [showingPreroll])
 
@@ -117,13 +133,21 @@ export default function Player({ channel, onBack, getRandomVideo }) {
     if (adVideoRef.current) { adVideoRef.current.pause(); adVideoRef.current.src = '' }
     setShowingPreroll(false)
     setPrerollVideo(null)
-    setTimeout(() => startHLS(), 200)
+    setAdBlocked(false)
+    setTimeout(() => {
+      startHLS()
+      if (videoRef.current) videoRef.current.play().catch(() => {})
+    }, 200)
   }
 
   function onPrerollEnded() {
     setShowingPreroll(false)
     setPrerollVideo(null)
-    setTimeout(() => startHLS(), 200)
+    setAdBlocked(false)
+    setTimeout(() => {
+      startHLS()
+      if (videoRef.current) videoRef.current.play().catch(() => {})
+    }, 200)
   }
 
   if (!channel) return null
@@ -159,9 +183,21 @@ export default function Player({ channel, onBack, getRandomVideo }) {
               className="w-full h-full object-contain"
               src={prerollVideo.video_url}
               playsInline
-              autoPlay
+              webkit-playsinline="true"
+              muted
               onEnded={onPrerollEnded}
             />
+
+            {/* Fallback for Safari autoplay block */}
+            {adBlocked && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-40">
+                <button onClick={playPreroll}
+                  className="bg-white text-gray-800 font-bold text-base px-8 py-4 rounded-2xl shadow-xl active:scale-95 transition">
+                  ▶ Ver anuncio
+                </button>
+              </div>
+            )}
+
             <div className="absolute top-3 left-3 bg-black/70 text-yellow-400 text-xs font-bold px-2.5 py-1 rounded z-30">
               PUBLICIDAD
             </div>
