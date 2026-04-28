@@ -1,13 +1,18 @@
 import { useRef, useEffect, useState } from 'react'
 import Hls from 'hls.js'
 
-export default function Player({ channel, onBack }) {
+export default function Player({ channel, onBack, getRandomVideo }) {
   const videoRef = useRef(null)
+  const adVideoRef = useRef(null)
   const hlsRef = useRef(null)
   const containerRef = useRef(null)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showingPreroll, setShowingPreroll] = useState(false)
+  const [prerollVideo, setPrerollVideo] = useState(null)
+  const [prerollSkippable, setPrerollSkippable] = useState(false)
+  const [prerollCountdown, setPrerollCountdown] = useState(5)
 
   useEffect(() => {
     const handleFSChange = () => {
@@ -39,27 +44,15 @@ export default function Player({ channel, onBack }) {
     }
   }
 
-  useEffect(() => {
-    if (!channel || !videoRef.current) return
-
+  function startHLS() {
     const video = videoRef.current
+    if (!video || !channel) return
     setError(false)
     setPlaying(false)
-
-    if (hlsRef.current) {
-      hlsRef.current.destroy()
-      hlsRef.current = null
-    }
-
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     const url = channel.url_hls
-
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-      })
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 30, maxMaxBufferLength: 60 })
       hlsRef.current = hls
       hls.loadSource(url)
       hls.attachMedia(video)
@@ -67,11 +60,7 @@ export default function Player({ channel, onBack }) {
         video.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          console.error('HLS fatal error:', data)
-          setError(true)
-          hls.destroy()
-        }
+        if (data.fatal) { setError(true); hls.destroy() }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url
@@ -79,14 +68,63 @@ export default function Player({ channel, onBack }) {
         video.play().then(() => setPlaying(true)).catch(() => {})
       })
     }
+  }
+
+  useEffect(() => {
+    if (!channel) return
+    setError(false)
+    setPlaying(false)
+    setPrerollSkippable(false)
+    setPrerollCountdown(5)
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
+
+    const ad = getRandomVideo ? getRandomVideo() : null
+    if (ad) {
+      setPrerollVideo(ad)
+      setShowingPreroll(true)
+    } else {
+      setShowingPreroll(false)
+      setPrerollVideo(null)
+      setTimeout(() => startHLS(), 50)
+    }
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy()
-        hlsRef.current = null
-      }
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     }
   }, [channel])
+
+  useEffect(() => {
+    if (showingPreroll && adVideoRef.current) {
+      adVideoRef.current.play().catch(() => {})
+    }
+  }, [showingPreroll])
+
+  useEffect(() => {
+    if (!showingPreroll) return
+    setPrerollCountdown(5)
+    setPrerollSkippable(false)
+    const iv = setInterval(() => {
+      setPrerollCountdown(c => {
+        if (c <= 1) { setPrerollSkippable(true); clearInterval(iv); return 0 }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(iv)
+  }, [showingPreroll])
+
+  function skipPreroll() {
+    if (!prerollSkippable) return
+    if (adVideoRef.current) { adVideoRef.current.pause(); adVideoRef.current.src = '' }
+    setShowingPreroll(false)
+    setPrerollVideo(null)
+    setTimeout(() => startHLS(), 200)
+  }
+
+  function onPrerollEnded() {
+    setShowingPreroll(false)
+    setPrerollVideo(null)
+    setTimeout(() => startHLS(), 200)
+  }
 
   if (!channel) return null
 
@@ -108,32 +146,62 @@ export default function Player({ channel, onBack }) {
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
+          style={{ display: showingPreroll ? 'none' : 'block' }}
           playsInline
           autoPlay
           controls
         />
 
-        {/* Fullscreen toggle */}
-        <button
-          onClick={toggleFullscreen}
-          className="absolute top-3 right-3 bg-black/60 text-white text-xs px-3 py-1 rounded-lg hover:bg-black/80 transition z-10"
-        >
-          {/iPad|iPhone|iPod/.test(navigator.userAgent) ? '⛶ Ampliar' : isFullscreen ? '⊡ Reducir' : '⛶ Ampliar'}
-        </button>
+        {showingPreroll && prerollVideo && (
+          <div className="absolute inset-0 bg-black z-20">
+            <video
+              ref={adVideoRef}
+              className="w-full h-full object-contain"
+              src={prerollVideo.video_url}
+              playsInline
+              autoPlay
+              onEnded={onPrerollEnded}
+            />
+            <div className="absolute top-3 left-3 bg-black/70 text-yellow-400 text-xs font-bold px-2.5 py-1 rounded z-30">
+              PUBLICIDAD
+            </div>
+            <div className="absolute bottom-4 right-4 z-30">
+              {prerollSkippable
+                ? <button onClick={skipPreroll}
+                    className="bg-white/90 text-gray-800 text-xs font-semibold px-4 py-2 rounded-lg hover:bg-white transition">
+                    Saltar anuncio ›
+                  </button>
+                : <div className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-lg">
+                    Saltar en {prerollCountdown}s
+                  </div>
+              }
+            </div>
+          </div>
+        )}
 
-        {/* Live badge */}
-        <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 px-3 py-1 rounded-lg">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse-dot" />
-          <span className="text-white text-xs font-bold tracking-wide">EN VIVO</span>
-          <span className="text-white/70 text-xs ml-1">{channel.nombre}</span>
-        </div>
+        {!showingPreroll && (
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-3 right-3 bg-black/60 text-white text-xs px-3 py-1 rounded-lg hover:bg-black/80 transition z-10"
+          >
+            {/iPad|iPhone|iPod/.test(navigator.userAgent) ? '⛶ Ampliar' : isFullscreen ? '⊡ Reducir' : '⛶ Ampliar'}
+          </button>
+        )}
+
+        {!showingPreroll && (
+          <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 px-3 py-1 rounded-lg">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse-dot" />
+            <span className="text-white text-xs font-bold tracking-wide">EN VIVO</span>
+            <span className="text-white/70 text-xs ml-1">{channel.nombre}</span>
+          </div>
+        )}
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
             <div className="text-center text-white">
               <div className="text-4xl mb-2">⚠️</div>
               <p className="text-sm">Error al cargar el canal</p>
-              <button onClick={() => { setError(false); if (hlsRef.current) hlsRef.current.destroy() }}
+              <button onClick={() => { setError(false); startHLS() }}
                 className="mt-3 px-4 py-1.5 bg-white/20 rounded text-xs">
                 Reintentar
               </button>

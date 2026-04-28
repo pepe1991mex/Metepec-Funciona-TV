@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChannels } from '../hooks/useChannels'
 import { useBanners } from '../hooks/useBanners'
+import { usePreroll } from '../hooks/usePreroll'
 import Player from './Player'
 import BannerCarousel from './BannerCarousel'
 
@@ -29,6 +30,7 @@ const PILLARS = [
 export default function HomeView({ usuario, onLogout }) {
   const { channels, loading, reload: reloadChannels } = useChannels()
   const { hero, intermedio, player: playerBanners, reload: reloadBanners } = useBanners()
+  const { getRandomVideo } = usePreroll()
   const [selected, setSelected] = useState(null)
   const [blocked, setBlocked] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -45,7 +47,11 @@ export default function HomeView({ usuario, onLogout }) {
   }
 
   async function openSession(ch) {
-    await closeActiveSession()
+    await supabase.from('sesiones')
+      .update({ fin: new Date().toISOString() })
+      .eq('usuario_id', usuario.id)
+      .is('fin', null)
+    sessionRef.current = null
     const { data } = await supabase.from('sesiones').insert({
       usuario_id: usuario.id,
       canal: ch.nombre,
@@ -54,6 +60,11 @@ export default function HomeView({ usuario, onLogout }) {
       minutos: 0
     }).select('id').single()
     if (data) sessionRef.current = data.id
+  }
+
+  async function handleLogout() {
+    await closeActiveSession()
+    onLogout()
   }
 
   function selectChannel(ch) {
@@ -66,6 +77,10 @@ export default function HomeView({ usuario, onLogout }) {
     closeActiveSession()
     setSelected(null)
   }
+
+  useEffect(() => {
+    return () => { closeActiveSession() }
+  }, [])
 
   function handleTouchStart(e) {
     if (window.scrollY === 0) touchStartY.current = e.touches[0].clientY
@@ -95,24 +110,26 @@ export default function HomeView({ usuario, onLogout }) {
       secondsRef.current += 1
       if (secondsRef.current >= SYNC_INTERVAL) {
         try {
-          await supabase.rpc('incrementar_segundos', {
-            p_usuario_id: usuario.id,
-            p_segundos: secondsRef.current
-          })
-          await supabase.from('sesiones').insert({
-            usuario_id: usuario.id,
-            minutos: 1,
-            canal: selected.nombre
-          })
-          const { data } = await supabase
-            .from('usuarios')
-            .select('minutos_consumidos, minutos_limite')
-            .eq('id', usuario.id)
-            .single()
-          if (data && data.minutos_consumidos >= data.minutos_limite) {
-            await closeActiveSession()
-            setBlocked(true)
-            setSelected(null)
+          if (usuario.tipo_tiempo !== 'ilimitado') {
+            await supabase.rpc('incrementar_segundos', {
+              p_usuario_id: usuario.id,
+              p_segundos: secondsRef.current
+            })
+            await supabase.from('sesiones').insert({
+              usuario_id: usuario.id,
+              minutos: 1,
+              canal: selected.nombre
+            })
+            const { data } = await supabase
+              .from('usuarios')
+              .select('minutos_consumidos, minutos_limite')
+              .eq('id', usuario.id)
+              .single()
+            if (data && data.minutos_consumidos >= data.minutos_limite) {
+              await closeActiveSession()
+              setBlocked(true)
+              setSelected(null)
+            }
           }
         } catch (err) {
           console.error('Sync error:', err)
@@ -129,8 +146,12 @@ export default function HomeView({ usuario, onLogout }) {
         <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm">
           <div className="text-5xl mb-4">⏱️</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">Límite alcanzado</h2>
-          <p className="text-gray-500 text-sm mb-4">Has consumido tu tiempo disponible.</p>
-          <button onClick={onLogout} className="px-6 py-2 rounded-lg text-white text-sm"
+          <p className="text-gray-500 text-sm mb-4">
+            {usuario.tipo_tiempo === 'mensual'
+              ? 'Has consumido tu tiempo mensual. Se reinicia el próximo mes.'
+              : 'Has consumido tu tiempo disponible.'}
+          </p>
+          <button onClick={handleLogout} className="px-6 py-2 rounded-lg text-white text-sm"
             style={{ background: '#2D4F9F' }}>Cerrar sesión</button>
         </div>
       </div>
@@ -182,7 +203,7 @@ export default function HomeView({ usuario, onLogout }) {
           </div>
           <div className="flex items-center gap-3">
             <img src="/logos/escudo.png" alt="Escudo" className="h-9 sm:h-11 object-contain" />
-            <button onClick={onLogout}
+            <button onClick={handleLogout}
               className="text-xs text-gray-400 hover:text-gray-600 transition ml-2">
               Salir
             </button>
@@ -241,7 +262,7 @@ export default function HomeView({ usuario, onLogout }) {
         {/* Player */}
         {selected && (
           <div className="mb-4">
-            <Player channel={selected} onBack={handleBack} />
+            <Player channel={selected} onBack={handleBack} getRandomVideo={getRandomVideo} />
 
             {/* ═══ BANNER PLAYER — Debajo del reproductor ═══ */}
             {playerBanners.length > 0 && (

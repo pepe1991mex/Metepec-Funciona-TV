@@ -18,7 +18,7 @@ export default function LoginView({ onLogin }) {
     try {
       const { data, error: dbError } = await supabase
         .from('usuarios')
-        .select('id, telefono, nombre, pin, minutos_consumidos, minutos_limite, activo, session_token')
+        .select('id, telefono, nombre, pin, minutos_consumidos, minutos_limite, activo, session_token, tipo_tiempo, ultimo_acceso')
         .eq('pin', pin)
         .single()
 
@@ -34,10 +34,23 @@ export default function LoginView({ onLogin }) {
         return
       }
 
-      if (data.minutos_consumidos >= data.minutos_limite) {
-        setError('Has alcanzado tu limite de ' + data.minutos_limite + ' minutos.')
-        setLoading(false)
-        return
+      const tipoTiempo = data.tipo_tiempo || 'fijo'
+
+      if (tipoTiempo !== 'ilimitado') {
+        // Reset mensual si es nuevo mes
+        if (tipoTiempo === 'mensual' && data.ultimo_acceso) {
+          const last = new Date(data.ultimo_acceso)
+          const now = new Date()
+          if (last.getMonth() !== now.getMonth() || last.getFullYear() !== now.getFullYear()) {
+            await supabase.from('usuarios').update({ minutos_consumidos: 0 }).eq('id', data.id)
+            data.minutos_consumidos = 0
+          }
+        }
+        if (data.minutos_consumidos >= data.minutos_limite) {
+          setError('Has alcanzado tu limite de ' + data.minutos_limite + ' minutos.')
+          setLoading(false)
+          return
+        }
       }
 
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36)
@@ -46,7 +59,7 @@ export default function LoginView({ onLogin }) {
         .update({ session_token: token, ultimo_acceso: new Date().toISOString() })
         .eq('id', data.id)
 
-      onLogin({ ...data, session_token: token })
+      onLogin({ ...data, tipo_tiempo: tipoTiempo, session_token: token })
     } catch (err) {
       setError('Error de conexion. Intenta de nuevo.')
     } finally {

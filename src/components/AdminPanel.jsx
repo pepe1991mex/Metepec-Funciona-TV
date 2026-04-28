@@ -5,6 +5,12 @@ const ADMIN_PW = import.meta.env.VITE_ADMIN_PASSWORD || 'metepec2026'
 const inp = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 mb-3 bg-white"
 const btn = "px-4 py-2 rounded-lg text-white text-sm font-semibold transition hover:opacity-90"
 
+const TIPO_LABELS = {
+  fijo:      { label: 'Fijo',      color: '#2D4F9F', bg: '#eff6ff' },
+  mensual:   { label: 'Mensual',   color: '#9B6BAE', bg: '#faf5ff' },
+  ilimitado: { label: 'Ilimitado', color: '#16a34a', bg: '#dcfce7' },
+}
+
 export default function AdminPanel() {
   const [auth, setAuth] = useState(false)
   const [pw, setPw] = useState('')
@@ -13,6 +19,7 @@ export default function AdminPanel() {
   const [usuarios, setUsuarios] = useState([])
   const [canales, setCanales] = useState([])
   const [banners, setBanners] = useState([])
+  const [prerolls, setPrerolls] = useState([])
   const [sesiones, setSesiones] = useState([])
   const [topCanales, setTopCanales] = useState([])
   const [liveViewers, setLiveViewers] = useState([])
@@ -21,13 +28,16 @@ export default function AdminPanel() {
   const [editingUser, setEditingUser] = useState(null)
   const [editingCanal, setEditingCanal] = useState(null)
   const [editingBanner, setEditingBanner] = useState(null)
+  const [editingPreroll, setEditingPreroll] = useState(null)
   const [addingUser, setAddingUser] = useState(false)
   const [addingCanal, setAddingCanal] = useState(false)
   const [addingBanner, setAddingBanner] = useState(false)
+  const [addingPreroll, setAddingPreroll] = useState(false)
 
-  const [newUser, setNewUser] = useState({ nombre: '', phone: '', pin: '', minutos_limite: 1800 })
+  const [newUser, setNewUser] = useState({ nombre: '', phone: '', pin: '', minutos_limite: 1800, tipo_tiempo: 'fijo' })
   const [newCanal, setNewCanal] = useState({ nombre: '', slug: '', url_hls: '', logo_url: '', categoria: 'Municipal', orden: 0 })
   const [newBanner, setNewBanner] = useState({ titulo: '', imagen_url: '', enlace: '', posicion: 'hero', orden: 0 })
+  const [newPreroll, setNewPreroll] = useState({ titulo: '', video_url: '', duracion: 15, orden: 0 })
 
   useEffect(() => {
     if (!auth) return
@@ -41,12 +51,12 @@ export default function AdminPanel() {
   }, [auth, tab])
 
   async function loadAll() {
-    await Promise.all([loadUsuarios(), loadCanales(), loadBanners(), loadDashboard()])
+    await Promise.all([loadUsuarios(), loadCanales(), loadBanners(), loadPrerolls(), loadDashboard()])
   }
 
   async function loadUsuarios() {
     const { data } = await supabase.from('usuarios')
-      .select('id, telefono, nombre, pin, minutos_consumidos, minutos_limite, activo, ultimo_acceso')
+      .select('id, telefono, nombre, pin, minutos_consumidos, minutos_limite, activo, ultimo_acceso, tipo_tiempo')
       .order('created_at', { ascending: false })
     if (data) setUsuarios(data)
   }
@@ -65,6 +75,13 @@ export default function AdminPanel() {
     if (data) setBanners(data)
   }
 
+  async function loadPrerolls() {
+    const { data } = await supabase.from('preroll_videos')
+      .select('id, titulo, video_url, duracion, activo, orden')
+      .order('orden', { ascending: true })
+    if (data) setPrerolls(data)
+  }
+
   async function loadDashboard() {
     const { data: all } = await supabase.from('sesiones').select('canal, minutos')
     if (all) {
@@ -73,11 +90,19 @@ export default function AdminPanel() {
       setTopCanales(Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 10))
     }
     const { data: live } = await supabase.from('sesiones')
-      .select('id, canal, inicio, usuarios(nombre, telefono)')
+      .select('id, canal, inicio, usuario_id, usuarios(nombre, telefono)')
       .is('fin', null)
       .not('inicio', 'is', null)
       .order('inicio', { ascending: false })
-    if (live) setLiveViewers(live)
+    if (live) {
+      const seen = new Set()
+      const unique = live.filter(s => {
+        if (seen.has(s.usuario_id)) return false
+        seen.add(s.usuario_id)
+        return true
+      })
+      setLiveViewers(unique)
+    }
   }
 
   async function loadSesiones() {
@@ -95,16 +120,18 @@ export default function AdminPanel() {
     const pin = newUser.pin || String(Math.floor(1000 + Math.random() * 9000))
     await supabase.from('usuarios').insert({
       telefono: '+52' + newUser.phone, nombre: newUser.nombre || null,
-      pin, minutos_limite: newUser.minutos_limite, activo: true
+      pin, minutos_limite: newUser.minutos_limite, activo: true,
+      tipo_tiempo: newUser.tipo_tiempo
     })
-    setNewUser({ nombre: '', phone: '', pin: '', minutos_limite: 1800 })
+    setNewUser({ nombre: '', phone: '', pin: '', minutos_limite: 1800, tipo_tiempo: 'fijo' })
     setAddingUser(false); loadUsuarios()
   }
 
   async function saveEditUser() {
     await supabase.from('usuarios').update({
       nombre: editingUser.nombre, pin: editingUser.pin,
-      minutos_limite: Number(editingUser.minutos_limite)
+      minutos_limite: Number(editingUser.minutos_limite),
+      tipo_tiempo: editingUser.tipo_tiempo
     }).eq('id', editingUser.id)
     setEditingUser(null); loadUsuarios()
   }
@@ -173,6 +200,33 @@ export default function AdminPanel() {
     loadBanners()
   }
 
+  // ── Preroll CRUD ──
+  async function addPreroll() {
+    if (!newPreroll.titulo || !newPreroll.video_url) return
+    await supabase.from('preroll_videos').insert({ ...newPreroll, activo: true })
+    setNewPreroll({ titulo: '', video_url: '', duracion: 15, orden: 0 })
+    setAddingPreroll(false); loadPrerolls()
+  }
+
+  async function saveEditPreroll() {
+    await supabase.from('preroll_videos').update({
+      titulo: editingPreroll.titulo, video_url: editingPreroll.video_url,
+      duracion: Number(editingPreroll.duracion), orden: Number(editingPreroll.orden)
+    }).eq('id', editingPreroll.id)
+    setEditingPreroll(null); loadPrerolls()
+  }
+
+  async function togglePreroll(id, activo) {
+    await supabase.from('preroll_videos').update({ activo: !activo }).eq('id', id)
+    loadPrerolls()
+  }
+
+  async function deletePreroll(id) {
+    if (!window.confirm('¿Eliminar este video preroll?')) return
+    await supabase.from('preroll_videos').delete().eq('id', id)
+    loadPrerolls()
+  }
+
   if (!auth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -195,10 +249,11 @@ export default function AdminPanel() {
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-    { id: 'usuarios', label: 'Usuarios', icon: '👥' },
-    { id: 'canales', label: 'Canales', icon: '📺' },
-    { id: 'publicidad', label: 'Publicidad', icon: '📢' },
-    { id: 'reportes', label: 'Reportes', icon: '📊' },
+    { id: 'usuarios',  label: 'Usuarios',  icon: '👥' },
+    { id: 'canales',   label: 'Canales',   icon: '📺' },
+    { id: 'publicidad',label: 'Publicidad',icon: '📢' },
+    { id: 'preroll',   label: 'Preroll',   icon: '🎬' },
+    { id: 'reportes',  label: 'Reportes',  icon: '📊' },
   ]
 
   const filteredUsers = search
@@ -242,7 +297,7 @@ export default function AdminPanel() {
                 { label: 'Total usuarios', value: usuarios.length, icon: '👥', color: '#2D4F9F' },
                 { label: 'Usuarios activos', value: usuarios.filter(u => u.activo).length, icon: '✅', color: '#22C55E' },
                 { label: 'Canales activos', value: canales.filter(c => c.activo).length, icon: '📺', color: '#F08A2E' },
-                { label: 'Bloqueados', value: usuarios.filter(u => u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
+                { label: 'Bloqueados', value: usuarios.filter(u => u.tipo_tiempo !== 'ilimitado' && u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
               ].map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3" style={{ background: s.color + '15' }}>{s.icon}</div>
@@ -342,10 +397,21 @@ export default function AdminPanel() {
                       onChange={e => setNewUser(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">Minutos límite</label>
-                    <input type="number" value={newUser.minutos_limite}
-                      onChange={e => setNewUser(p => ({ ...p, minutos_limite: parseInt(e.target.value) || 1800 }))} className={inp} />
+                    <label className="block text-sm text-gray-500 mb-1">Tipo de tiempo</label>
+                    <select value={newUser.tipo_tiempo}
+                      onChange={e => setNewUser(p => ({ ...p, tipo_tiempo: e.target.value }))} className={inp}>
+                      <option value="fijo">Fijo (minutos fijos)</option>
+                      <option value="mensual">Mensual (se reinicia cada mes)</option>
+                      <option value="ilimitado">Ilimitado</option>
+                    </select>
                   </div>
+                  {newUser.tipo_tiempo !== 'ilimitado' && (
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Minutos límite</label>
+                      <input type="number" value={newUser.minutos_limite}
+                        onChange={e => setNewUser(p => ({ ...p, minutos_limite: parseInt(e.target.value) || 1800 }))} className={inp} />
+                    </div>
+                  )}
                 </div>
                 <button onClick={addUsuario} className={btn} style={{ background: '#16a34a' }}>Guardar Usuario</button>
               </div>
@@ -360,9 +426,20 @@ export default function AdminPanel() {
                   <label className="block text-sm text-gray-500 mb-1">PIN</label>
                   <input value={editingUser.pin || ''} maxLength={6}
                     onChange={e => setEditingUser(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') }))} className={inp} />
-                  <label className="block text-sm text-gray-500 mb-1">Minutos límite</label>
-                  <input type="number" value={editingUser.minutos_limite}
-                    onChange={e => setEditingUser(p => ({ ...p, minutos_limite: e.target.value }))} className={inp} />
+                  <label className="block text-sm text-gray-500 mb-1">Tipo de tiempo</label>
+                  <select value={editingUser.tipo_tiempo || 'fijo'}
+                    onChange={e => setEditingUser(p => ({ ...p, tipo_tiempo: e.target.value }))} className={inp}>
+                    <option value="fijo">Fijo</option>
+                    <option value="mensual">Mensual</option>
+                    <option value="ilimitado">Ilimitado</option>
+                  </select>
+                  {(editingUser.tipo_tiempo || 'fijo') !== 'ilimitado' && (
+                    <>
+                      <label className="block text-sm text-gray-500 mb-1">Minutos límite</label>
+                      <input type="number" value={editingUser.minutos_limite}
+                        onChange={e => setEditingUser(p => ({ ...p, minutos_limite: e.target.value }))} className={inp} />
+                    </>
+                  )}
                   <div className="flex gap-3 mt-1">
                     <button onClick={saveEditUser} className={btn + ' flex-1'} style={{ background: '#2D4F9F' }}>Guardar</button>
                     <button onClick={() => setEditingUser(null)} className="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Cancelar</button>
@@ -378,55 +455,71 @@ export default function AdminPanel() {
                     <th className="text-left px-4 py-3">Nombre</th>
                     <th className="text-left px-4 py-3 hidden sm:table-cell">Teléfono</th>
                     <th className="text-left px-4 py-3 hidden md:table-cell">PIN</th>
-                    <th className="text-left px-4 py-3">Minutos</th>
+                    <th className="text-left px-4 py-3">Tiempo</th>
+                    <th className="text-left px-4 py-3 hidden lg:table-cell">Tipo</th>
                     <th className="text-left px-4 py-3">Estado</th>
                     <th className="text-left px-4 py-3 hidden lg:table-cell">Último acceso</th>
                     <th className="text-left px-4 py-3">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map(u => (
-                    <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                      <td className="px-4 py-4 font-medium">{u.nombre || 'Sin nombre'}</td>
-                      <td className="px-4 py-4 text-gray-500 hidden sm:table-cell">{u.telefono}</td>
-                      <td className="px-4 py-4 hidden md:table-cell">
-                        <span className="font-mono font-bold" style={{ color: '#2D4F9F' }}>{u.pin || '—'}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-700">{u.minutos_consumidos}/{u.minutos_limite}</div>
-                        <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1">
-                          <div className="h-1.5 rounded-full" style={{
-                            width: `${Math.min(100, (u.minutos_consumidos / u.minutos_limite) * 100)}%`,
-                            background: u.minutos_consumidos >= u.minutos_limite ? '#EF4444' : '#2D4F9F'
-                          }} />
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-1 rounded-full text-xs font-semibold"
-                          style={{ background: u.activo ? '#dcfce7' : '#fee2e2', color: u.activo ? '#16a34a' : '#dc2626' }}>
-                          {u.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-xs text-gray-400 hidden lg:table-cell">
-                        {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-MX') : '—'}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex gap-1.5 flex-wrap">
-                          <button onClick={() => { setEditingUser({ ...u }); setAddingUser(false) }}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100">Editar</button>
-                          <button onClick={() => resetMinutos(u.id)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-500 hover:bg-orange-100">Reset</button>
-                          <button onClick={() => toggleUsuario(u.id, u.activo)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold"
-                            style={{ background: u.activo ? '#fee2e2' : '#dcfce7', color: u.activo ? '#dc2626' : '#16a34a' }}>
-                            {u.activo ? 'Desactivar' : 'Activar'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredUsers.map(u => {
+                    const tipo = TIPO_LABELS[u.tipo_tiempo || 'fijo'] || TIPO_LABELS.fijo
+                    return (
+                      <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                        <td className="px-4 py-4 font-medium">{u.nombre || 'Sin nombre'}</td>
+                        <td className="px-4 py-4 text-gray-500 hidden sm:table-cell">{u.telefono}</td>
+                        <td className="px-4 py-4 hidden md:table-cell">
+                          <span className="font-mono font-bold" style={{ color: '#2D4F9F' }}>{u.pin || '—'}</span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {u.tipo_tiempo === 'ilimitado' ? (
+                            <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>∞</span>
+                          ) : (
+                            <>
+                              <div className="text-sm text-gray-700">{u.minutos_consumidos}/{u.minutos_limite}</div>
+                              <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1">
+                                <div className="h-1.5 rounded-full" style={{
+                                  width: `${Math.min(100, (u.minutos_consumidos / (u.minutos_limite || 1)) * 100)}%`,
+                                  background: u.minutos_consumidos >= u.minutos_limite ? '#EF4444' : '#2D4F9F'
+                                }} />
+                              </div>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 hidden lg:table-cell">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: tipo.bg, color: tipo.color }}>
+                            {tipo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold"
+                            style={{ background: u.activo ? '#dcfce7' : '#fee2e2', color: u.activo ? '#16a34a' : '#dc2626' }}>
+                            {u.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-xs text-gray-400 hidden lg:table-cell">
+                          {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-MX') : '—'}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button onClick={() => { setEditingUser({ ...u }); setAddingUser(false) }}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100">Editar</button>
+                            <button onClick={() => resetMinutos(u.id)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-500 hover:bg-orange-100">Reset</button>
+                            <button onClick={() => toggleUsuario(u.id, u.activo)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                              style={{ background: u.activo ? '#fee2e2' : '#dcfce7', color: u.activo ? '#dc2626' : '#16a34a' }}>
+                              {u.activo ? 'Desactivar' : 'Activar'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                   {filteredUsers.length === 0 && (
-                    <tr><td colSpan={7} className="py-10 text-center text-gray-400">No se encontraron usuarios</td></tr>
+                    <tr><td colSpan={8} className="py-10 text-center text-gray-400">No se encontraron usuarios</td></tr>
                   )}
                 </tbody>
               </table>
@@ -682,6 +775,118 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* ═══ PREROLL ═══ */}
+        {tab === 'preroll' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg">Videos Preroll ({prerolls.length})</h3>
+              <button onClick={() => { setAddingPreroll(!addingPreroll); setEditingPreroll(null) }}
+                className={btn} style={{ background: '#2D4F9F' }}>
+                {addingPreroll ? '✕ Cancelar' : '+ Agregar Video'}
+              </button>
+            </div>
+
+            <div className="bg-yellow-50 rounded-xl p-4 mb-4 text-sm text-yellow-700 leading-relaxed">
+              <div className="font-semibold mb-1">🎬 Videos Preroll</div>
+              <div>Se muestran automáticamente al seleccionar un canal. El usuario puede saltarlos después de 5 segundos. El video se elige al azar entre los activos.</div>
+            </div>
+
+            {addingPreroll && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4 shadow-sm">
+                <div className="font-semibold text-base mb-4">Nuevo Video Preroll</div>
+                <div className="grid sm:grid-cols-2 gap-x-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-gray-500 mb-1">Título *</label>
+                    <input placeholder="Nombre del anuncio" value={newPreroll.titulo}
+                      onChange={e => setNewPreroll(p => ({ ...p, titulo: e.target.value }))} className={inp} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-gray-500 mb-1">URL del Video *</label>
+                    <input placeholder="https://... .mp4" value={newPreroll.video_url}
+                      onChange={e => setNewPreroll(p => ({ ...p, video_url: e.target.value }))} className={inp} />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">Duración (segundos)</label>
+                    <input type="number" value={newPreroll.duracion}
+                      onChange={e => setNewPreroll(p => ({ ...p, duracion: parseInt(e.target.value) || 15 }))} className={inp} />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">Orden</label>
+                    <input type="number" value={newPreroll.orden}
+                      onChange={e => setNewPreroll(p => ({ ...p, orden: parseInt(e.target.value) || 0 }))} className={inp} />
+                  </div>
+                </div>
+                <button onClick={addPreroll} className={btn} style={{ background: '#16a34a' }}>Guardar Video</button>
+              </div>
+            )}
+
+            {editingPreroll && (
+              <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg">
+                  <div className="font-bold text-lg mb-4">Editar Video Preroll</div>
+                  <label className="block text-sm text-gray-500 mb-1">Título</label>
+                  <input value={editingPreroll.titulo} onChange={e => setEditingPreroll(p => ({ ...p, titulo: e.target.value }))} className={inp} />
+                  <label className="block text-sm text-gray-500 mb-1">URL del Video</label>
+                  <input value={editingPreroll.video_url} onChange={e => setEditingPreroll(p => ({ ...p, video_url: e.target.value }))} className={inp} />
+                  {editingPreroll.video_url && (
+                    <video src={editingPreroll.video_url} controls className="w-full rounded-lg mb-3" style={{ maxHeight: 160 }} />
+                  )}
+                  <div className="grid grid-cols-2 gap-x-4">
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Duración (s)</label>
+                      <input type="number" value={editingPreroll.duracion} onChange={e => setEditingPreroll(p => ({ ...p, duracion: e.target.value }))} className={inp} />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Orden</label>
+                      <input type="number" value={editingPreroll.orden} onChange={e => setEditingPreroll(p => ({ ...p, orden: e.target.value }))} className={inp} />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-1">
+                    <button onClick={saveEditPreroll} className={btn + ' flex-1'} style={{ background: '#2D4F9F' }}>Guardar</button>
+                    <button onClick={() => setEditingPreroll(null)} className="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Cancelar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {prerolls.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">
+                  No hay videos preroll. Agrega uno para que aparezca antes de los canales.
+                </div>
+              )}
+              {prerolls.map(p => (
+                <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-start gap-4">
+                  <video src={p.video_url} className="w-40 h-24 object-cover rounded-lg bg-black flex-shrink-0" muted />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-800 mb-1">{p.titulo}</div>
+                    <div className="text-xs text-gray-400 truncate mb-2">{p.video_url}</div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">⏱ {p.duracion}s</span>
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Orden: {p.orden}</span>
+                      <span className="text-xs px-2 py-0.5 rounded font-semibold"
+                        style={{ background: p.activo ? '#dcfce7' : '#fee2e2', color: p.activo ? '#16a34a' : '#dc2626' }}>
+                        {p.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button onClick={() => { setEditingPreroll({ ...p }); setAddingPreroll(false) }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100">Editar</button>
+                    <button onClick={() => togglePreroll(p.id, p.activo)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ background: p.activo ? '#fee2e2' : '#dcfce7', color: p.activo ? '#dc2626' : '#16a34a' }}>
+                      {p.activo ? 'Desactivar' : 'Activar'}
+                    </button>
+                    <button onClick={() => deletePreroll(p.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500">🗑️</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ═══ REPORTES ═══ */}
         {tab === 'reportes' && (
           <div className="space-y-5">
@@ -690,7 +895,7 @@ export default function AdminPanel() {
                 { label: 'Total usuarios', value: usuarios.length, icon: '👥', color: '#2D4F9F' },
                 { label: 'Usuarios activos', value: usuarios.filter(u => u.activo).length, icon: '✅', color: '#22C55E' },
                 { label: 'Canales activos', value: canales.filter(c => c.activo).length, icon: '📺', color: '#F08A2E' },
-                { label: 'Bloqueados', value: usuarios.filter(u => u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
+                { label: 'Bloqueados', value: usuarios.filter(u => u.tipo_tiempo !== 'ilimitado' && u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
               ].map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3" style={{ background: s.color + '15' }}>{s.icon}</div>
