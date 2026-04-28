@@ -39,8 +39,8 @@ export default function AdminPanel() {
   const [newBanner, setNewBanner] = useState({ titulo: '', imagen_url: '', enlace: '', posicion: 'hero', orden: 0 })
   const [newPreroll, setNewPreroll] = useState({ titulo: '', video_url: '', duracion: 15, orden: 0 })
   const [prerollCanalesMap, setPrerollCanalesMap] = useState({})
-  const [selectedCanalesAdd, setSelectedCanalesAdd] = useState([])
-  const [selectedCanalesEdit, setSelectedCanalesEdit] = useState([])
+  const [canalesDisponibles, setCanalesDisponibles] = useState([])
+  const [canalesSeleccionados, setCanalesSeleccionados] = useState([])
 
   useEffect(() => {
     if (!auth) return
@@ -50,7 +50,9 @@ export default function AdminPanel() {
   }, [auth])
 
   useEffect(() => {
-    if (auth && tab === 'reportes') loadSesiones()
+    if (!auth) return
+    if (tab === 'reportes') loadSesiones()
+    if (tab === 'preroll') loadCanalesDisponibles()
   }, [auth, tab])
 
   async function loadAll() {
@@ -97,6 +99,14 @@ export default function AdminPanel() {
       })
       setPrerollCanalesMap(grouped)
     }
+  }
+
+  async function loadCanalesDisponibles() {
+    const { data } = await supabase.from('canales')
+      .select('id, nombre, slug, activo')
+      .eq('activo', true)
+      .order('orden', { ascending: true })
+    if (data) setCanalesDisponibles(data)
   }
 
   async function loadDashboard() {
@@ -223,13 +233,13 @@ export default function AdminPanel() {
     const { data: inserted } = await supabase.from('preroll_videos')
       .insert({ ...newPreroll, activo: true })
       .select('id').single()
-    if (inserted && selectedCanalesAdd.length > 0) {
+    if (inserted && canalesSeleccionados.length > 0) {
       await supabase.from('preroll_canales').insert(
-        selectedCanalesAdd.map(canal_id => ({ preroll_id: inserted.id, canal_id, activo: true }))
+        canalesSeleccionados.map(canal_id => ({ preroll_id: inserted.id, canal_id, activo: true }))
       )
     }
     setNewPreroll({ titulo: '', video_url: '', duracion: 15, orden: 0 })
-    setSelectedCanalesAdd([])
+    setCanalesSeleccionados([])
     setAddingPreroll(false)
     loadPrerolls(); loadPrerollCanales()
   }
@@ -240,13 +250,13 @@ export default function AdminPanel() {
       duracion: Number(editingPreroll.duracion), orden: Number(editingPreroll.orden)
     }).eq('id', editingPreroll.id)
     await supabase.from('preroll_canales').delete().eq('preroll_id', editingPreroll.id)
-    if (selectedCanalesEdit.length > 0) {
+    if (canalesSeleccionados.length > 0) {
       await supabase.from('preroll_canales').insert(
-        selectedCanalesEdit.map(canal_id => ({ preroll_id: editingPreroll.id, canal_id, activo: true }))
+        canalesSeleccionados.map(canal_id => ({ preroll_id: editingPreroll.id, canal_id, activo: true }))
       )
     }
     setEditingPreroll(null)
-    setSelectedCanalesEdit([])
+    setCanalesSeleccionados([])
     loadPrerolls(); loadPrerollCanales()
   }
 
@@ -814,7 +824,7 @@ export default function AdminPanel() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Videos Preroll ({prerolls.length})</h3>
-              <button onClick={() => { setAddingPreroll(!addingPreroll); setEditingPreroll(null) }}
+              <button onClick={() => { setCanalesSeleccionados([]); setAddingPreroll(!addingPreroll); setEditingPreroll(null) }}
                 className={btn} style={{ background: '#2D4F9F' }}>
                 {addingPreroll ? '✕ Cancelar' : '+ Agregar Video'}
               </button>
@@ -851,24 +861,24 @@ export default function AdminPanel() {
                   </div>
                   <div className="sm:col-span-2">
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm text-gray-500">Canales donde aparece</label>
-                      <button type="button" onClick={() => setSelectedCanalesAdd(
-                        selectedCanalesAdd.length === canales.length ? [] : canales.map(c => c.id)
+                      <label className="block text-sm text-gray-500 font-medium">Asignar a canales:</label>
+                      <button type="button" onClick={() => setCanalesSeleccionados(
+                        canalesSeleccionados.length === canalesDisponibles.length ? [] : canalesDisponibles.map(c => c.id)
                       )} className="text-xs text-blue-500 hover:text-blue-700">
-                        {selectedCanalesAdd.length === canales.length ? 'Ninguno' : 'Todos los canales'}
+                        {canalesSeleccionados.length === canalesDisponibles.length ? 'Ninguno' : 'Todos los canales'}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {canales.map(c => (
+                      {canalesDisponibles.map(c => (
                         <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" checked={selectedCanalesAdd.includes(c.id)}
-                            onChange={() => setSelectedCanalesAdd(prev =>
+                          <input type="checkbox" checked={canalesSeleccionados.includes(c.id)}
+                            onChange={() => setCanalesSeleccionados(prev =>
                               prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
                             )} />
                           <span className="text-gray-700 truncate">{c.nombre}</span>
                         </label>
                       ))}
-                      {canales.length === 0 && <span className="text-gray-400 text-xs col-span-2">No hay canales disponibles</span>}
+                      {canalesDisponibles.length === 0 && <span className="text-gray-400 text-xs col-span-2">No hay canales disponibles</span>}
                     </div>
                   </div>
                 </div>
@@ -899,29 +909,29 @@ export default function AdminPanel() {
                   </div>
                   <div className="mb-3">
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm text-gray-500">Canales donde aparece</label>
-                      <button type="button" onClick={() => setSelectedCanalesEdit(
-                        selectedCanalesEdit.length === canales.length ? [] : canales.map(c => c.id)
+                      <label className="block text-sm text-gray-500 font-medium">Asignar a canales:</label>
+                      <button type="button" onClick={() => setCanalesSeleccionados(
+                        canalesSeleccionados.length === canalesDisponibles.length ? [] : canalesDisponibles.map(c => c.id)
                       )} className="text-xs text-blue-500 hover:text-blue-700">
-                        {selectedCanalesEdit.length === canales.length ? 'Ninguno' : 'Todos los canales'}
+                        {canalesSeleccionados.length === canalesDisponibles.length ? 'Ninguno' : 'Todos los canales'}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                      {canales.map(c => (
+                      {canalesDisponibles.map(c => (
                         <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" checked={selectedCanalesEdit.includes(c.id)}
-                            onChange={() => setSelectedCanalesEdit(prev =>
+                          <input type="checkbox" checked={canalesSeleccionados.includes(c.id)}
+                            onChange={() => setCanalesSeleccionados(prev =>
                               prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
                             )} />
                           <span className="text-gray-700 truncate">{c.nombre}</span>
                         </label>
                       ))}
-                      {canales.length === 0 && <span className="text-gray-400 text-xs col-span-2">No hay canales disponibles</span>}
+                      {canalesDisponibles.length === 0 && <span className="text-gray-400 text-xs col-span-2">No hay canales disponibles</span>}
                     </div>
                   </div>
                   <div className="flex gap-3 mt-1">
                     <button onClick={saveEditPreroll} className={btn + ' flex-1'} style={{ background: '#2D4F9F' }}>Guardar</button>
-                    <button onClick={() => { setEditingPreroll(null); setSelectedCanalesEdit([]) }} className="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Cancelar</button>
+                    <button onClick={() => { setEditingPreroll(null); setCanalesSeleccionados([]) }} className="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Cancelar</button>
                   </div>
                 </div>
               </div>
@@ -955,15 +965,16 @@ export default function AdminPanel() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-orange-500">Sin asignar — no aparecerá en ningún canal</span>
+                        <span className="text-xs text-red-500 font-medium">⚠ Sin canales asignados</span>
                       )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0">
-                    <button onClick={() => {
+                    <button onClick={async () => {
                         setEditingPreroll({ ...p })
                         setAddingPreroll(false)
-                        setSelectedCanalesEdit((prerollCanalesMap[p.id] || []).map(pc => pc.canal_id))
+                        const { data } = await supabase.from('preroll_canales').select('canal_id').eq('preroll_id', p.id)
+                        setCanalesSeleccionados(data ? data.map(r => r.canal_id) : [])
                       }}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100">Editar</button>
                     <button onClick={() => togglePreroll(p.id, p.activo)}
