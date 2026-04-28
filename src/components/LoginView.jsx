@@ -131,6 +131,11 @@ export default function LoginView({ onLogin }) {
         </button>
 
         <img src="/logos/metepec-ruta.jpg" alt="Estamos en la Ruta" className="h-8 mx-auto mt-4 object-contain opacity-40" />
+        <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ padding: '6px 16px', background: '#2A3240', borderRadius: '6px', display: 'inline-block' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '12px', fontWeight: '600', letterSpacing: '0.5px' }}>Powered by Shark Broadcast</span>
+          </div>
+        </div>
       </div>
     </div>
   )
