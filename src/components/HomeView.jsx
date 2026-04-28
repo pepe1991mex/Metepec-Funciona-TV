@@ -323,7 +323,7 @@ export default function HomeView({ usuario, onLogout }) {
         <div className="text-[10px] text-gray-300 leading-6">
           Gobierno Municipal de Metepec 2025-2027 • Estamos en la Ruta<br />
           Solidaridad • Unidad • Participación<br />
-          <span className="opacity-50">Powered by Shark Broadcast</span>
+          — <span className="text-xs font-semibold" style={{ color: '#2A3240' }}>Powered by Shark Broadcast</span>
         </div>
       </footer>
     </div>
