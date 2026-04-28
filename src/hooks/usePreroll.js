@@ -2,30 +2,42 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function usePreroll() {
-  const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [allVideos, setAllVideos] = useState([])
+  const [prerollCanales, setPrerollCanales] = useState([])
 
-  useEffect(() => { loadVideos() }, [])
+  useEffect(() => { load() }, [])
 
-  async function loadVideos() {
+  async function load() {
     try {
-      const { data } = await supabase
-        .from('preroll_videos')
-        .select('id, titulo, video_url, duracion, activo, orden')
-        .eq('activo', true)
-        .order('orden', { ascending: true })
-      setVideos(data || [])
+      const [{ data: videos }, { data: canales }] = await Promise.all([
+        supabase.from('preroll_videos')
+          .select('id, titulo, video_url, duracion, activo, orden')
+          .eq('activo', true),
+        supabase.from('preroll_canales')
+          .select('preroll_id, canal_id')
+          .eq('activo', true)
+      ])
+      setAllVideos(videos || [])
+      setPrerollCanales(canales || [])
     } catch {
-      setVideos([])
+      setAllVideos([])
+      setPrerollCanales([])
     } finally {
       setLoading(false)
     }
   }
 
-  function getRandomVideo() {
-    if (videos.length === 0) return null
-    return videos[Math.floor(Math.random() * videos.length)]
+  function getRandomVideo(canalId) {
+    if (!canalId) return null
+    const assignedIds = prerollCanales
+      .filter(pc => pc.canal_id === canalId)
+      .map(pc => pc.preroll_id)
+    if (assignedIds.length === 0) return null
+    const eligible = allVideos.filter(v => assignedIds.includes(v.id))
+    if (eligible.length === 0) return null
+    return eligible[Math.floor(Math.random() * eligible.length)]
   }
 
-  return { videos, loading, getRandomVideo, reload: loadVideos }
+  return { loading, getRandomVideo, reload: load }
 }

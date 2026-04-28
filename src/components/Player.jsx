@@ -78,7 +78,7 @@ export default function Player({ channel, onBack, getRandomVideo }) {
     setPrerollCountdown(5)
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
 
-    const ad = getRandomVideo ? getRandomVideo() : null
+    const ad = getRandomVideo ? getRandomVideo(channel.id) : null
     if (ad) {
       setPrerollVideo(ad)
       setShowingPreroll(true)
