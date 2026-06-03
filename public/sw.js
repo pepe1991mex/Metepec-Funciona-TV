@@ -1,5 +1,5 @@
-const CACHE = 'metepec-tv-v2'
-const PRECACHE = ['/', '/logos/escudo.png', '/logos/metepec-ruta.jpg', '/logos/metepec-funciona.jpg']
+const CACHE = 'metepec-tv-v3'
+const PRECACHE = ['/', '/logos/escudo.png', '/logos/metepec-ruta.png', '/logos/metepec-funciona.jpg']
 const NO_CACHE = ['supabase.co', '.m3u8', '.ts', 'b-cdn.net']
 
 self.addEventListener('install', e => {

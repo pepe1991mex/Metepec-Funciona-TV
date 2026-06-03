@@ -100,7 +100,7 @@ export default function LoginView({ onLogin }) {
 
           {/* ─── BIENVENIDA (izquierda / arriba en móvil) ─── */}
           <div className="md:w-1/2 p-7 sm:p-9" style={{ background: 'linear-gradient(160deg, #F4F8FD 0%, #EAF4F6 100%)' }}>
-            <img src="/logos/metepec-ruta.jpg" alt="Estamos en la Ruta" className="h-11 sm:h-12 object-contain mb-5" />
+            <img src="/logos/metepec-ruta.png" alt="Estamos en la Ruta" className="h-11 sm:h-12 object-contain mb-5" />
 
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2" style={{ color: '#2D4F9F' }}>
               Bienvenido a tu <span style={{ color: '#F08A2E' }}>televisión municipal</span>

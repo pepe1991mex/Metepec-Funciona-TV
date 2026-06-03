@@ -256,7 +256,7 @@ export default function HomeView({ usuario, onLogout }) {
         <div className="h-[3px]" style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
         <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logos/metepec-ruta.jpg" alt="Metepec" className="h-9 sm:h-11 object-contain" />
+            <img src="/logos/metepec-ruta.png" alt="Metepec" className="h-9 sm:h-11 object-contain" />
             <div className="hidden sm:block">
               <div className="text-base font-black tracking-tight leading-tight">
                 <span style={{ color: '#E9AF25' }}>Metepec</span>{' '}
@@ -302,7 +302,7 @@ export default function HomeView({ usuario, onLogout }) {
             <div className="absolute bottom-[-40px] right-16 w-24 h-24 rounded-full" style={{ background: '#EF9FC512' }} />
             <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
               <div className="flex-1">
-                <img src="/logos/metepec-ruta.jpg" alt="Estamos en la Ruta" className="h-12 sm:h-14 object-contain mb-4" />
+                <img src="/logos/metepec-ruta.png" alt="Estamos en la Ruta" className="h-12 sm:h-14 object-contain mb-4" />
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2" style={{ color: '#2D4F9F' }}>
                   Metepec <span style={{ color: '#F08A2E' }}>Funciona</span> TV
                 </h1>
@@ -428,7 +428,7 @@ export default function HomeView({ usuario, onLogout }) {
           style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
         <div className="flex items-center justify-center gap-4 mb-3">
           <img src="/logos/escudo.png" alt="Escudo" className="h-8 object-contain" />
-          <img src="/logos/metepec-ruta.jpg" alt="Metepec" className="h-6 object-contain" />
+          <img src="/logos/metepec-ruta.png" alt="Metepec" className="h-6 object-contain" />
         </div>
         <div className="text-[10px] text-gray-300 leading-6">
           Gobierno Municipal de Metepec 2025-2027 • Estamos en la Ruta<br />
