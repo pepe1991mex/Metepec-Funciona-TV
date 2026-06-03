@@ -89,6 +89,7 @@ export default function HomeView({ usuario, onLogout }) {
   const [blocked, setBlocked] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
+  const [query, setQuery] = useState('')
   const secondsRef = useRef(0)
   const timerRef = useRef(null)
   const sessionRef = useRef(null)
@@ -134,7 +135,10 @@ export default function HomeView({ usuario, onLogout }) {
     onLogout()
   }
 
+  // Cambiar de canal: actualiza selected (mismo player sticky, sin remontar),
+  // cierra la sesión anterior y abre la nueva. No hace nada si ya estás viendo ese canal.
   function selectChannel(ch) {
+    if (selected && selected.id === ch.id) return
     setSelected(ch)
     setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 100)
     openSession(ch)
@@ -143,6 +147,7 @@ export default function HomeView({ usuario, onLogout }) {
   function handleBack() {
     closeActiveSession()
     setSelected(null)
+    setQuery('')
   }
 
   useEffect(() => {
@@ -226,7 +231,32 @@ export default function HomeView({ usuario, onLogout }) {
   }
 
   const categories = groupByCategory(channels)
-  const otherChannels = selected ? channels.filter(c => c.id !== selected.id) : []
+
+  // Filtro de búsqueda (solo se usa en la vista de canal abierto)
+  const q = query.trim().toLowerCase()
+  const visibleCategories = q
+    ? categories
+        .map(g => ({ ...g, items: g.items.filter(c => (c.nombre || '').toLowerCase().includes(q)) }))
+        .filter(g => g.items.length > 0)
+    : categories
+
+  // Renderiza el catálogo completo (filas por categoría + banner intermedio tras la primera).
+  // Resalta el canal en reproducción (selectedId) con borde de color y badge "VIENDO AHORA".
+  const renderCatalog = (cats) => cats.map((group, idx) => (
+    <Fragment key={group.categoria}>
+      <CategoryRow
+        categoria={group.categoria}
+        items={group.items}
+        selectedId={selected ? selected.id : null}
+        onSelect={selectChannel}
+      />
+      {idx === 0 && intermedio.length > 0 && cats.length > 1 && (
+        <div className="my-6">
+          <BannerCarousel banners={intermedio} className="shadow-soft" />
+        </div>
+      )}
+    </Fragment>
+  ))
 
   return (
     <div className="min-h-screen" style={{ background: '#F7F9FC' }}
@@ -250,8 +280,8 @@ export default function HomeView({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm"
+      {/* Header — sticky en el home; estático al ver un canal (para que el player sea el sticky superior) */}
+      <header className={`bg-white border-b border-gray-100 shadow-sm ${selected ? 'relative z-40' : 'sticky top-0 z-50'}`}
         style={{ top: 0, paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
         <div className="h-[3px]" style={{ background: 'linear-gradient(90deg, #F5D623, #EF9FC5, #2D4F9F, #5BC0C4, #F08A2E, #9B6BAE, #ACCA14, #92D3F3)' }} />
         <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
@@ -325,31 +355,38 @@ export default function HomeView({ usuario, onLogout }) {
           </div>
         )}
 
-        {/* ═══ VISTA PLAYER (canal seleccionado) ═══ */}
+        {/* ═══ VISTA CANAL ABIERTO — Player sticky + catálogo navegable (estilo Pluto/Samsung TV+) ═══ */}
         {selected && (
-          <div className="mb-6 animate-fade-in">
-            {/* Aviso de error al asegurar el canal VPS (token) */}
-            {streamInfo && tokenResult.error && (
-              <div className="mb-2 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl px-3 py-2">
-                <span>No se pudo asegurar el canal: {tokenResult.error}</span>
-                <button onClick={() => tokenResult.refresh()}
-                  className="flex-shrink-0 bg-red-600 text-white px-3 py-1 rounded-md font-semibold hover:bg-red-700 transition">
-                  Reintentar
-                </button>
+          <div>
+            {/* Reproductor STICKY: sigue visible y reproduciendo mientras navegas el catálogo.
+                No se remonta al hacer scroll ni al cambiar de canal (misma instancia de Player). */}
+            <div className="sticky z-30 -mx-4 px-4 pb-3"
+              style={{ top: 0, paddingTop: 'env(safe-area-inset-top)', background: '#F7F9FC' }}>
+              <div className="mx-auto lg:max-w-3xl">
+                {/* Aviso de error al asegurar el canal VPS (token) */}
+                {streamInfo && tokenResult.error && (
+                  <div className="mb-2 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl px-3 py-2">
+                    <span>No se pudo asegurar el canal: {tokenResult.error}</span>
+                    <button onClick={() => tokenResult.refresh()}
+                      className="flex-shrink-0 bg-red-600 text-white px-3 py-1 rounded-md font-semibold hover:bg-red-700 transition">
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+
+                {/* Estado de carga mientras se genera el token VPS */}
+                {streamInfo && tokenResult.loading && !tokenResult.error && (
+                  <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-xl px-3 py-2" style={{ color: '#2D4F9F' }}>
+                    <span className="inline-block animate-spin">⏳</span>
+                    Asegurando transmisión…
+                  </div>
+                )}
+
+                <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
               </div>
-            )}
+            </div>
 
-            {/* Estado de carga mientras se genera el token VPS */}
-            {streamInfo && tokenResult.loading && !tokenResult.error && (
-              <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-xl px-3 py-2" style={{ color: '#2D4F9F' }}>
-                <span className="inline-block animate-spin">⏳</span>
-                Asegurando transmisión…
-              </div>
-            )}
-
-            <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
-
-            {/* Header del canal en reproducción */}
+            {/* Header del canal en reproducción + botón Cerrar */}
             <div className="mt-4 flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 border overflow-hidden"
                 style={{ background: '#F4F8FD', borderColor: '#E4E9F0' }}>
@@ -368,26 +405,51 @@ export default function HomeView({ usuario, onLogout }) {
                   )}
                 </div>
               </div>
+              <button onClick={handleBack}
+                className="flex-shrink-0 flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-xl border transition hover:bg-gray-50 active:scale-95"
+                style={{ borderColor: '#E4E9F0', color: '#5A6577' }}>
+                ✕ Cerrar
+              </button>
             </div>
 
-            {/* ═══ BANNER PLAYER — Debajo del reproductor ═══ */}
+            {/* ═══ BANNER PLAYER — Debajo del header del canal ═══ */}
             {playerBanners.length > 0 && (
               <div className="mt-4">
                 <BannerCarousel banners={playerBanners} className="shadow-soft" />
               </div>
             )}
 
-            {/* También en vivo — otros canales en formato póster */}
-            {otherChannels.length > 0 && (
-              <section className="mt-7">
-                <h2 className="font-black tracking-tight text-lg mb-3" style={{ color: '#2A3240' }}>También en vivo</h2>
-                <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
-                  {otherChannels.map((ch, i) => (
-                    <PosterCard key={ch.id} ch={ch} accent={ACCENTS[i % ACCENTS.length]} active={false} onSelect={selectChannel} />
-                  ))}
+            {/* Catálogo completo navegable + búsqueda rápida */}
+            <div className="mt-7 animate-fade-in">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none" style={{ color: '#B6BECB' }}>🔍</span>
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Buscar canal…"
+                    className="w-full rounded-2xl border pl-9 pr-3 py-2.5 text-sm outline-none transition"
+                    style={{ borderColor: '#E4E9F0', background: 'white', color: '#2A3240' }}
+                  />
                 </div>
-              </section>
-            )}
+                {query && (
+                  <button onClick={() => setQuery('')}
+                    className="flex-shrink-0 text-xs font-bold px-3 py-2.5 rounded-xl border transition hover:bg-gray-50 active:scale-95"
+                    style={{ borderColor: '#E4E9F0', color: '#5A6577' }}>
+                    Limpiar
+                  </button>
+                )}
+              </div>
+
+              {visibleCategories.length === 0 ? (
+                <div className="text-center py-12 text-sm" style={{ color: '#8D96A5' }}>
+                  Sin resultados para “{query}”.
+                </div>
+              ) : (
+                renderCatalog(visibleCategories)
+              )}
+            </div>
           </div>
         )}
 
@@ -405,18 +467,7 @@ export default function HomeView({ usuario, onLogout }) {
             </div>
           ) : (
             <div className="animate-fade-in">
-              {categories.map((group, idx) => (
-                <Fragment key={group.categoria}>
-                  <CategoryRow categoria={group.categoria} items={group.items} onSelect={selectChannel} />
-
-                  {/* ═══ BANNER INTERMEDIO — Entre la primera y segunda categoría ═══ */}
-                  {idx === 0 && intermedio.length > 0 && categories.length > 1 && (
-                    <div className="my-6">
-                      <BannerCarousel banners={intermedio} className="shadow-soft" />
-                    </div>
-                  )}
-                </Fragment>
-              ))}
+              {renderCatalog(categories)}
             </div>
           )
         )}
@@ -441,7 +492,7 @@ export default function HomeView({ usuario, onLogout }) {
 }
 
 // ─── Sección de categoría: título + fila horizontal de tarjetas póster (estilo BAIT/Netflix) ───
-function CategoryRow({ categoria, items, onSelect }) {
+function CategoryRow({ categoria, items, selectedId, onSelect }) {
   return (
     <section className="mb-7">
       <div className="flex items-end justify-between mb-3 px-0.5">
@@ -454,7 +505,7 @@ function CategoryRow({ categoria, items, onSelect }) {
       </div>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
         {items.map((ch, i) => (
-          <PosterCard key={ch.id} ch={ch} accent={ACCENTS[i % ACCENTS.length]} active={false} onSelect={onSelect} />
+          <PosterCard key={ch.id} ch={ch} accent={ACCENTS[i % ACCENTS.length]} active={selectedId === ch.id} onSelect={onSelect} />
         ))}
       </div>
     </section>
@@ -473,13 +524,20 @@ function PosterCard({ ch, accent, active, onSelect }) {
           background: '#F4F8FD',
           borderColor: active ? accent : '#E4E9F0',
           borderWidth: active ? 2 : 1,
-          boxShadow: active ? `0 6px 20px ${accent}33` : '0 2px 8px rgba(0,0,0,0.06)',
+          boxShadow: active ? `0 6px 20px ${accent}44` : '0 2px 8px rgba(0,0,0,0.06)',
         }}>
-        {/* Badge LIVE */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-red-600 text-white text-2xs font-bold px-1.5 py-0.5 rounded">
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" />
-          LIVE
-        </div>
+        {/* Badge: "VIENDO AHORA" si es el canal activo, si no "LIVE" */}
+        {active ? (
+          <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-1 text-white text-2xs font-bold px-1.5 py-0.5 rounded" style={{ background: accent }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" />
+            VIENDO AHORA
+          </div>
+        ) : (
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-red-600 text-white text-2xs font-bold px-1.5 py-0.5 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" />
+            LIVE
+          </div>
+        )}
 
         {/* Logo o iniciales centradas */}
         <div className="absolute inset-0 flex items-center justify-center p-5">
@@ -495,7 +553,8 @@ function PosterCard({ ch, accent, active, onSelect }) {
           </svg>
         </div>
       </div>
-      <div className="mt-1.5 font-bold text-xs line-clamp-1" style={{ color: '#2A3240' }}>{ch.nombre}</div>
+      <div className="mt-1.5 font-bold text-xs line-clamp-1"
+        style={{ color: active ? accent : '#2A3240' }}>{ch.nombre}</div>
     </button>
   )
 }
