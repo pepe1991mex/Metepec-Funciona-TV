@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChannels } from '../hooks/useChannels'
 import { useBanners } from '../hooks/useBanners'
@@ -29,6 +29,10 @@ function getStreamName(url) {
 const SYNC_INTERVAL = 60
 const ACCENTS = ['#2D4F9F','#5BC0C4','#F08A2E','#9B6BAE','#ACCA14','#EF9FC5','#92D3F3','#F5D623']
 
+// Orden de secciones por categoría (estilo BAIT). Municipal SIEMPRE primero;
+// las categorías no listadas van al final, en orden alfabético.
+const CATEGORY_ORDER = ['Municipal', 'Entretenimiento', 'Noticias', 'Películas', 'Musical', 'Niños', 'Religión', 'General']
+
 const TICKER_ITEMS = [
   '🏛️ Metepec Ciudad que Funciona — Más seguridad, más iluminación, más servicios',
   '📢 Gobierno Municipal 2025-2027 — Estamos en la Ruta',
@@ -46,6 +50,36 @@ const PILLARS = [
   { icon: '🎭', label: 'Cultura', color: '#9B6BAE' },
   { icon: '⚙️', label: 'Servicios', color: '#5BC0C4' },
 ]
+
+// Iniciales para canales sin logo (p. ej. "Azteca 1" -> "A1", "Multimedios" -> "MU")
+function getInitials(name) {
+  if (!name) return '?'
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return '?'
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return (words[0][0] + words[1][0]).toUpperCase()
+}
+
+// Agrupa canales por categoría respetando CATEGORY_ORDER (Municipal primero).
+function groupByCategory(channels) {
+  const groups = {}
+  for (const ch of channels) {
+    const cat = ch.categoria || 'General'
+    if (!groups[cat]) groups[cat] = []
+    groups[cat].push(ch)
+  }
+  const rank = (c) => {
+    const i = CATEGORY_ORDER.indexOf(c)
+    return i === -1 ? 999 : i
+  }
+  return Object.keys(groups)
+    .sort((a, b) => {
+      const ra = rank(a), rb = rank(b)
+      if (ra !== rb) return ra - rb
+      return a.localeCompare(b)
+    })
+    .map(cat => ({ categoria: cat, items: groups[cat] }))
+}
 
 export default function HomeView({ usuario, onLogout }) {
   const { channels, loading, reload: reloadChannels } = useChannels()
@@ -191,12 +225,11 @@ export default function HomeView({ usuario, onLogout }) {
     )
   }
 
-  // Split channels for interstitial banner placement
-  const firstRow = channels.slice(0, 4)
-  const restRows = channels.slice(4)
+  const categories = groupByCategory(channels)
+  const otherChannels = selected ? channels.filter(c => c.id !== selected.id) : []
 
   return (
-    <div className="min-h-screen bg-gray-50"
+    <div className="min-h-screen" style={{ background: '#F7F9FC' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -225,11 +258,11 @@ export default function HomeView({ usuario, onLogout }) {
           <div className="flex items-center gap-3">
             <img src="/logos/metepec-ruta.jpg" alt="Metepec" className="h-9 sm:h-11 object-contain" />
             <div className="hidden sm:block">
-              <div className="text-base font-bold leading-tight">
+              <div className="text-base font-black tracking-tight leading-tight">
                 <span style={{ color: '#E9AF25' }}>Metepec</span>{' '}
-                <span className="text-gray-400 font-normal">Funciona TV</span>
+                <span className="text-gray-400 font-semibold">Funciona TV</span>
               </div>
-              <div className="text-[9px] text-gray-300 uppercase tracking-widest">
+              <div className="text-2xs text-gray-300 uppercase tracking-widest">
                 Ciudad que Funciona • 2025-2027
               </div>
             </div>
@@ -258,19 +291,19 @@ export default function HomeView({ usuario, onLogout }) {
         {/* ═══ BANNER HERO — Publicidad principal arriba ═══ */}
         {!selected && hero.length > 0 && (
           <div className="mb-5">
-            <BannerCarousel banners={hero} className="shadow-sm" />
+            <BannerCarousel banners={hero} className="shadow-soft" />
           </div>
         )}
 
         {/* Hero info section */}
         {!selected && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 mb-6 relative overflow-hidden">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-soft p-5 sm:p-8 mb-7 relative overflow-hidden animate-fade-in">
             <div className="absolute top-[-30px] right-[-30px] w-28 h-28 rounded-full" style={{ background: '#F5D62315' }} />
             <div className="absolute bottom-[-40px] right-16 w-24 h-24 rounded-full" style={{ background: '#EF9FC512' }} />
             <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
               <div className="flex-1">
                 <img src="/logos/metepec-ruta.jpg" alt="Estamos en la Ruta" className="h-12 sm:h-14 object-contain mb-4" />
-                <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-2" style={{ color: '#2D4F9F' }}>
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2" style={{ color: '#2D4F9F' }}>
                   Metepec <span style={{ color: '#F08A2E' }}>Funciona</span> TV
                 </h1>
                 <p className="text-sm text-gray-400 max-w-md leading-relaxed">
@@ -286,18 +319,18 @@ export default function HomeView({ usuario, onLogout }) {
                 </div>
               </div>
               <div className="hidden sm:block flex-shrink-0">
-                <img src="/logos/metepec-funciona.jpg" alt="Ciudad que Funciona" className="h-24 object-contain rounded-lg" />
+                <img src="/logos/metepec-funciona.jpg" alt="Ciudad que Funciona" className="h-24 object-contain rounded-2xl" />
               </div>
             </div>
           </div>
         )}
 
-        {/* Player */}
+        {/* ═══ VISTA PLAYER (canal seleccionado) ═══ */}
         {selected && (
-          <div className="mb-4">
+          <div className="mb-6 animate-fade-in">
             {/* Aviso de error al asegurar el canal VPS (token) */}
             {streamInfo && tokenResult.error && (
-              <div className="mb-2 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg px-3 py-2">
+              <div className="mb-2 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl px-3 py-2">
                 <span>No se pudo asegurar el canal: {tokenResult.error}</span>
                 <button onClick={() => tokenResult.refresh()}
                   className="flex-shrink-0 bg-red-600 text-white px-3 py-1 rounded-md font-semibold hover:bg-red-700 transition">
@@ -308,7 +341,7 @@ export default function HomeView({ usuario, onLogout }) {
 
             {/* Estado de carga mientras se genera el token VPS */}
             {streamInfo && tokenResult.loading && !tokenResult.error && (
-              <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-lg px-3 py-2" style={{ color: '#2D4F9F' }}>
+              <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-xl px-3 py-2" style={{ color: '#2D4F9F' }}>
                 <span className="inline-block animate-spin">⏳</span>
                 Asegurando transmisión…
               </div>
@@ -316,51 +349,76 @@ export default function HomeView({ usuario, onLogout }) {
 
             <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
 
+            {/* Header del canal en reproducción */}
+            <div className="mt-4 flex items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 border overflow-hidden"
+                style={{ background: '#F4F8FD', borderColor: '#E4E9F0' }}>
+                {selected.logo_url
+                  ? <img src={selected.logo_url} alt={selected.nombre} className="max-w-[80%] max-h-[80%] object-contain" />
+                  : <span className="font-black text-lg" style={{ color: '#2D4F9F' }}>{getInitials(selected.nombre)}</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-black tracking-tight text-lg truncate" style={{ color: '#2A3240' }}>{selected.nombre}</h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="inline-flex items-center gap-1 bg-red-600 text-white text-2xs font-bold px-1.5 py-0.5 rounded">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" /> EN VIVO
+                  </span>
+                  {selected.categoria && (
+                    <span className="text-2xs uppercase tracking-wider font-semibold" style={{ color: '#8D96A5' }}>{selected.categoria}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* ═══ BANNER PLAYER — Debajo del reproductor ═══ */}
             {playerBanners.length > 0 && (
-              <div className="mt-3">
-                <BannerCarousel banners={playerBanners} className="shadow-sm" />
+              <div className="mt-4">
+                <BannerCarousel banners={playerBanners} className="shadow-soft" />
               </div>
+            )}
+
+            {/* También en vivo — otros canales en formato póster */}
+            {otherChannels.length > 0 && (
+              <section className="mt-7">
+                <h2 className="font-black tracking-tight text-lg mb-3" style={{ color: '#2A3240' }}>También en vivo</h2>
+                <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+                  {otherChannels.map((ch, i) => (
+                    <PosterCard key={ch.id} ch={ch} accent={ACCENTS[i % ACCENTS.length]} active={false} onSelect={selectChannel} />
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         )}
 
-        {/* Channel Grid */}
-        {loading ? (
-          <div className="text-center py-20 text-gray-400">
-            <div className="text-4xl mb-3 animate-spin">⏳</div>
-            Cargando canales...
-          </div>
-        ) : channels.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <div className="text-4xl mb-3">📺</div>
-            <p className="text-sm">No hay canales activos</p>
-          </div>
-        ) : (
-          <>
-            {/* First row of channels */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {firstRow.map((ch, i) => (
-                <ChannelCard key={ch.id} ch={ch} i={i} selected={selected} onSelect={selectChannel} />
+        {/* ═══ CATÁLOGO POR CATEGORÍAS (sin canal seleccionado) ═══ */}
+        {!selected && (
+          loading ? (
+            <div className="text-center py-20 text-gray-400">
+              <div className="text-4xl mb-3 animate-spin">⏳</div>
+              Cargando canales...
+            </div>
+          ) : channels.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <div className="text-4xl mb-3">📺</div>
+              <p className="text-sm">No hay canales activos</p>
+            </div>
+          ) : (
+            <div className="animate-fade-in">
+              {categories.map((group, idx) => (
+                <Fragment key={group.categoria}>
+                  <CategoryRow categoria={group.categoria} items={group.items} onSelect={selectChannel} />
+
+                  {/* ═══ BANNER INTERMEDIO — Entre la primera y segunda categoría ═══ */}
+                  {idx === 0 && intermedio.length > 0 && categories.length > 1 && (
+                    <div className="my-6">
+                      <BannerCarousel banners={intermedio} className="shadow-soft" />
+                    </div>
+                  )}
+                </Fragment>
               ))}
             </div>
-
-            {/* ═══ BANNER INTERMEDIO — Entre filas de canales ═══ */}
-            {intermedio.length > 0 && restRows.length > 0 && (
-              <div className="my-5">
-                <BannerCarousel banners={intermedio} className="shadow-sm" />
-              </div>
-            )}
-
-            {/* Remaining channels */}
-            {restRows.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
-                {restRows.map((ch, i) => (
-                  <ChannelCard key={ch.id} ch={ch} i={i + 4} selected={selected} onSelect={selectChannel} />
-                ))}
-              </div>
-            )}
-          </>
+          )
         )}
       </main>
 
@@ -382,28 +440,62 @@ export default function HomeView({ usuario, onLogout }) {
   )
 }
 
-// ─── Channel Card (extracted for cleaner code) ───
-function ChannelCard({ ch, i, selected, onSelect }) {
-  const accent = ACCENTS[i % ACCENTS.length]
-  const isActive = selected?.id === ch.id
+// ─── Sección de categoría: título + fila horizontal de tarjetas póster (estilo BAIT/Netflix) ───
+function CategoryRow({ categoria, items, onSelect }) {
   return (
-    <div onClick={() => onSelect(ch)}
-      className="bg-white rounded-xl overflow-hidden border cursor-pointer transition-all hover:-translate-y-1"
-      style={{
-        borderColor: isActive ? accent : '#eee',
-        borderWidth: isActive ? 2 : 1,
-        boxShadow: isActive ? `0 6px 20px ${accent}30` : '0 1px 4px rgba(0,0,0,0.04)',
-      }}>
-      <div className="h-1" style={{ background: accent }} />
-      <div className="p-4">
-        {isActive && <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse-dot float-right mt-1" />}
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3"
-          style={{ background: accent + '14' }}>
-          {ch.logo_url ? <img src={ch.logo_url} alt="" className="w-7 h-7 object-contain" /> : '📺'}
-        </div>
-        <div className="font-semibold text-sm text-gray-800 leading-tight">{ch.nombre}</div>
-        {ch.categoria && <div className="text-[10px] text-gray-400 mt-1">{ch.categoria}</div>}
+    <section className="mb-7">
+      <div className="flex items-end justify-between mb-3 px-0.5">
+        <h2 className="font-black tracking-tight text-base sm:text-lg" style={{ color: '#2A3240' }}>{categoria}</h2>
+        {items.length > 3 && (
+          <span className="text-2xs uppercase tracking-wider flex-shrink-0 ml-3" style={{ color: '#B6BECB' }}>
+            👆 Desliza para ver más
+          </span>
+        )}
       </div>
-    </div>
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+        {items.map((ch, i) => (
+          <PosterCard key={ch.id} ch={ch} accent={ACCENTS[i % ACCENTS.length]} active={false} onSelect={onSelect} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ─── Tarjeta de canal estilo póster vertical (4/5) ───
+function PosterCard({ ch, accent, active, onSelect }) {
+  return (
+    <button onClick={() => onSelect(ch)}
+      className="press-scale flex-shrink-0 text-left"
+      style={{ width: 140 }}>
+      <div className="relative rounded-2xl overflow-hidden border"
+        style={{
+          aspectRatio: '4 / 5',
+          background: '#F4F8FD',
+          borderColor: active ? accent : '#E4E9F0',
+          borderWidth: active ? 2 : 1,
+          boxShadow: active ? `0 6px 20px ${accent}33` : '0 2px 8px rgba(0,0,0,0.06)',
+        }}>
+        {/* Badge LIVE */}
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-red-600 text-white text-2xs font-bold px-1.5 py-0.5 rounded">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" />
+          LIVE
+        </div>
+
+        {/* Logo o iniciales centradas */}
+        <div className="absolute inset-0 flex items-center justify-center p-5">
+          {ch.logo_url
+            ? <img src={ch.logo_url} alt={ch.nombre} className="max-w-full max-h-full object-contain" />
+            : <span className="font-black text-4xl" style={{ color: '#2D4F9F' }}>{getInitials(ch.nombre)}</span>}
+        </div>
+
+        {/* Botón play circular */}
+        <div className="absolute bottom-2 right-2 z-10 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="#2A3240" style={{ marginLeft: 1 }}>
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+      <div className="mt-1.5 font-bold text-xs line-clamp-1" style={{ color: '#2A3240' }}>{ch.nombre}</div>
+    </button>
   )
 }

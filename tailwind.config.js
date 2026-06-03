@@ -18,7 +18,14 @@ export default {
           mid: '#5A6577',
           light: '#8D96A5',
         }
-      }
+      },
+      fontSize: {
+        '2xs': '0.625rem',
+      },
+      boxShadow: {
+        soft: '0 2px 8px rgba(0,0,0,0.06)',
+        card: '0 6px 20px rgba(0,0,0,0.08)',
+      },
     },
   },
   plugins: [],
