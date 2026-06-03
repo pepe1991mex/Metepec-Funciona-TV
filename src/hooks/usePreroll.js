@@ -12,7 +12,7 @@ export function usePreroll() {
     try {
       const [{ data: videos }, { data: canales }] = await Promise.all([
         supabase.from('preroll_videos')
-          .select('id, titulo, video_url, duracion, activo, orden')
+          .select('id, titulo, video_url, duracion, activo, orden, tipo')
           .eq('activo', true),
         supabase.from('preroll_canales')
           .select('preroll_id, canal_id')

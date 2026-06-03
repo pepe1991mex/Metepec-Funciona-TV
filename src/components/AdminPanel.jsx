@@ -37,7 +37,7 @@ export default function AdminPanel() {
   const [newUser, setNewUser] = useState({ nombre: '', phone: '', pin: '', minutos_limite: 1800, tipo_tiempo: 'fijo' })
   const [newCanal, setNewCanal] = useState({ nombre: '', slug: '', url_hls: '', logo_url: '', categoria: 'Municipal', orden: 0 })
   const [newBanner, setNewBanner] = useState({ titulo: '', imagen_url: '', enlace: '', posicion: 'hero', orden: 0 })
-  const [newPreroll, setNewPreroll] = useState({ titulo: '', video_url: '', duracion: 15, orden: 0 })
+  const [newPreroll, setNewPreroll] = useState({ titulo: '', video_url: '', duracion: 15, orden: 0, tipo: 'video' })
   const [prerollCanalesMap, setPrerollCanalesMap] = useState({})
   const [canalesDisponibles, setCanalesDisponibles] = useState([])
   const [canalesSeleccionados, setCanalesSeleccionados] = useState([])
@@ -82,7 +82,7 @@ export default function AdminPanel() {
 
   async function loadPrerolls() {
     const { data } = await supabase.from('preroll_videos')
-      .select('id, titulo, video_url, duracion, activo, orden')
+      .select('id, titulo, video_url, duracion, activo, orden, tipo')
       .order('orden', { ascending: true })
     if (data) setPrerolls(data)
   }
@@ -238,7 +238,7 @@ export default function AdminPanel() {
         canalesSeleccionados.map(canal_id => ({ preroll_id: inserted.id, canal_id, activo: true }))
       )
     }
-    setNewPreroll({ titulo: '', video_url: '', duracion: 15, orden: 0 })
+    setNewPreroll({ titulo: '', video_url: '', duracion: 15, orden: 0, tipo: 'video' })
     setCanalesSeleccionados([])
     setAddingPreroll(false)
     loadPrerolls(); loadPrerollCanales()
@@ -247,7 +247,8 @@ export default function AdminPanel() {
   async function saveEditPreroll() {
     await supabase.from('preroll_videos').update({
       titulo: editingPreroll.titulo, video_url: editingPreroll.video_url,
-      duracion: Number(editingPreroll.duracion), orden: Number(editingPreroll.orden)
+      duracion: Number(editingPreroll.duracion), orden: Number(editingPreroll.orden),
+      tipo: editingPreroll.tipo || 'video'
     }).eq('id', editingPreroll.id)
     await supabase.from('preroll_canales').delete().eq('preroll_id', editingPreroll.id)
     if (canalesSeleccionados.length > 0) {
@@ -845,14 +846,29 @@ export default function AdminPanel() {
                       onChange={e => setNewPreroll(p => ({ ...p, titulo: e.target.value }))} className={inp} />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm text-gray-500 mb-1">URL del Video *</label>
-                    <input placeholder="https://... .mp4" value={newPreroll.video_url}
+                    <label className="block text-sm text-gray-500 mb-1">Tipo</label>
+                    <select value={newPreroll.tipo || 'video'}
+                      onChange={e => setNewPreroll(p => ({ ...p, tipo: e.target.value, duracion: e.target.value === 'imagen' ? 5 : 15 }))}
+                      className={inp}>
+                      <option value="video">Video (MP4)</option>
+                      <option value="imagen">Imagen (JPG/PNG)</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm text-gray-500 mb-1">
+                      {newPreroll.tipo === 'imagen' ? 'URL de la Imagen *' : 'URL del Video *'}
+                    </label>
+                    <input
+                      placeholder={newPreroll.tipo === 'imagen' ? 'https://... .jpg / .png' : 'https://... .mp4'}
+                      value={newPreroll.video_url}
                       onChange={e => setNewPreroll(p => ({ ...p, video_url: e.target.value }))} className={inp} />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">Duración (segundos)</label>
+                    <label className="block text-sm text-gray-500 mb-1">
+                      {newPreroll.tipo === 'imagen' ? 'Tiempo de visualización (s)' : 'Duración (segundos)'}
+                    </label>
                     <input type="number" value={newPreroll.duracion}
-                      onChange={e => setNewPreroll(p => ({ ...p, duracion: parseInt(e.target.value) || 15 }))} className={inp} />
+                      onChange={e => setNewPreroll(p => ({ ...p, duracion: parseInt(e.target.value) || (newPreroll.tipo === 'imagen' ? 5 : 15) }))} className={inp} />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">Orden</label>
