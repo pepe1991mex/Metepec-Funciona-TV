@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState } from 'react'
 import Hls from 'hls.js'
 
-export default function Player({ channel, onBack, getRandomVideo }) {
+export default function Player({ channel, url, onBack, getRandomVideo }) {
   const videoRef = useRef(null)
   const adVideoRef = useRef(null)
   const hlsRef = useRef(null)
   const containerRef = useRef(null)
+  const streamActiveRef = useRef(false)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -51,11 +52,15 @@ export default function Player({ channel, onBack, getRandomVideo }) {
     setError(false)
     setPlaying(false)
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
-    const url = channel.url_hls
+    // Usa la URL tokenizada (prop url) si viene; si no, la URL directa del canal.
+    // El query string (?token=...&expires=...) no afecta la detección/carga de HLS.
+    const src = url || channel.url_hls
+    if (!src) return
+    streamActiveRef.current = true
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 30, maxMaxBufferLength: 60 })
       hlsRef.current = hls
-      hls.loadSource(url)
+      hls.loadSource(src)
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
@@ -64,7 +69,7 @@ export default function Player({ channel, onBack, getRandomVideo }) {
         if (data.fatal) { setError(true); hls.destroy() }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url
+      video.src = src
       video.addEventListener('loadedmetadata', () => {
         video.play().then(() => setPlaying(true)).catch(() => {})
       })
@@ -86,6 +91,7 @@ export default function Player({ channel, onBack, getRandomVideo }) {
 
   useEffect(() => {
     if (!channel) return
+    streamActiveRef.current = false
     setError(false)
     setPlaying(false)
     setPrerollSkippable(false)
@@ -108,6 +114,16 @@ export default function Player({ channel, onBack, getRandomVideo }) {
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     }
   }, [channel])
+
+  // Recarga el stream cuando cambia la URL tokenizada (llega el token o se renueva),
+  // pero solo si ya estamos reproduciendo el canal (no durante el preroll ni antes del 1er play).
+  // Para canales abiertos url es constante por canal, así que esto nunca dispara recargas extra.
+  useEffect(() => {
+    if (!channel || showingPreroll) return
+    if (!streamActiveRef.current) return
+    startHLS()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url])
 
   useEffect(() => {
     if (showingPreroll && adVideoRef.current) {

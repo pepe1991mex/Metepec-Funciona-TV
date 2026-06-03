@@ -5,6 +5,26 @@ import { useBanners } from '../hooks/useBanners'
 import { usePreroll } from '../hooks/usePreroll'
 import Player from './Player'
 import BannerCarousel from './BannerCarousel'
+import { useStreamToken } from '../hooks/useStreamToken'
+
+// Detecta canales del VPS (cache.sharkbroadcast.com / b-cdn / IPs Shark) que requieren token.
+// Devuelve { name, uri } para tokenizar, o null para canales abiertos (mdstrm, akamai, streamlock),
+// que se siguen reproduciendo directo sin token.
+function getStreamName(url) {
+  if (!url) return null;
+  var match = url.match(/\/hls\/([a-zA-Z0-9\-_]+)(\.m3u8|\/)/);
+  if (!match) return null;
+  if (url.indexOf('cache.sharkbroadcast.com') !== -1 ||
+      url.indexOf('b-cdn.net') !== -1 ||
+      url.indexOf('51.161.11.132') !== -1 ||
+      url.indexOf('51.222.159.36') !== -1 ||
+      url.indexOf('195.35.14.230') !== -1 ||
+      url.indexOf('sharkbroadcast.com') !== -1) {
+    try { return { name: match[1], uri: new URL(url).pathname }; }
+    catch (e) { return null; }
+  }
+  return null;
+}
 
 const SYNC_INTERVAL = 60
 const ACCENTS = ['#2D4F9F','#5BC0C4','#F08A2E','#9B6BAE','#ACCA14','#EF9FC5','#92D3F3','#F5D623']
@@ -39,6 +59,19 @@ export default function HomeView({ usuario, onLogout }) {
   const timerRef = useRef(null)
   const sessionRef = useRef(null)
   const touchStartY = useRef(null)
+
+  // ─── Tokenización de streams VPS (canales BAIT/TU TV vía cache.sharkbroadcast.com) ───
+  // getStreamName devuelve null para canales abiertos (mdstrm, akamai, streamlock): esos
+  // usan selected.url_hls directo. El hook usa useState/useEffect, por eso SIEMPRE se llama
+  // en cada render (incluso con selected=null); internamente no hace fetch si falta algún dato.
+  const streamInfo = selected ? getStreamName(selected.url_hls) : null
+  const tokenResult = useStreamToken(
+    streamInfo ? streamInfo.name : null,
+    usuario && usuario.id ? usuario.id : null,
+    usuario && usuario.session_token ? usuario.session_token : null,
+    streamInfo ? streamInfo.uri : null
+  )
+  const playerUrl = !selected ? '' : (!streamInfo ? selected.url_hls : (tokenResult.streamUrl || selected.url_hls))
 
   async function closeActiveSession() {
     if (!sessionRef.current) return
@@ -262,7 +295,26 @@ export default function HomeView({ usuario, onLogout }) {
         {/* Player */}
         {selected && (
           <div className="mb-4">
-            <Player channel={selected} onBack={handleBack} getRandomVideo={getRandomVideo} />
+            {/* Aviso de error al asegurar el canal VPS (token) */}
+            {streamInfo && tokenResult.error && (
+              <div className="mb-2 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg px-3 py-2">
+                <span>No se pudo asegurar el canal: {tokenResult.error}</span>
+                <button onClick={() => tokenResult.refresh()}
+                  className="flex-shrink-0 bg-red-600 text-white px-3 py-1 rounded-md font-semibold hover:bg-red-700 transition">
+                  Reintentar
+                </button>
+              </div>
+            )}
+
+            {/* Estado de carga mientras se genera el token VPS */}
+            {streamInfo && tokenResult.loading && !tokenResult.error && (
+              <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-lg px-3 py-2" style={{ color: '#2D4F9F' }}>
+                <span className="inline-block animate-spin">⏳</span>
+                Asegurando transmisión…
+              </div>
+            )}
+
+            <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
 
             {/* ═══ BANNER PLAYER — Debajo del reproductor ═══ */}
             {playerBanners.length > 0 && (
