@@ -142,6 +142,8 @@ export default function HomeView({ usuario, onLogout }) {
     setSelected(ch)
     setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 100)
     openSession(ch)
+    // Métrica: registrar vista del canal (fire-and-forget, no bloquea)
+    supabase.rpc('registrar_vista_canal', { p_canal_slug: ch.slug }).then(() => {}).catch(() => {})
   }
 
   function handleBack() {

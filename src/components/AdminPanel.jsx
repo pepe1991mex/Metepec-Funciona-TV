@@ -24,6 +24,14 @@ export default function AdminPanel() {
   const [topCanales, setTopCanales] = useState([])
   const [liveViewers, setLiveViewers] = useState([])
 
+  // ── Métricas vía RPCs (nivel BAIT TV) ──
+  const [metricas, setMetricas] = useState(null)
+  const [canalesPopulares, setCanalesPopulares] = useState([])
+  const [horarioPico, setHorarioPico] = useState([])
+  const [bannerStats, setBannerStats] = useState([])
+  const [prerollStats, setPrerollStats] = useState([])
+  const [loadingMetrics, setLoadingMetrics] = useState(true)
+
   const [search, setSearch] = useState('')
   const [editingUser, setEditingUser] = useState(null)
   const [editingCanal, setEditingCanal] = useState(null)
@@ -45,7 +53,7 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!auth) return
     loadAll()
-    const iv = setInterval(loadDashboard, 30000)
+    const iv = setInterval(() => { loadDashboard(); loadMetricas() }, 30000)
     return () => clearInterval(iv)
   }, [auth])
 
@@ -56,7 +64,30 @@ export default function AdminPanel() {
   }, [auth, tab])
 
   async function loadAll() {
-    await Promise.all([loadUsuarios(), loadCanales(), loadBanners(), loadPrerolls(), loadPrerollCanales(), loadDashboard()])
+    await Promise.all([loadUsuarios(), loadCanales(), loadBanners(), loadPrerolls(), loadPrerollCanales(), loadDashboard(), loadMetricas()])
+  }
+
+  // Carga las métricas agregadas desde los RPCs de Supabase
+  async function loadMetricas() {
+    setLoadingMetrics(true)
+    try {
+      const [m, cp, hp, bs, ps] = await Promise.all([
+        supabase.rpc('admin_get_metricas'),
+        supabase.rpc('admin_get_canales_populares', { p_limit: 10 }),
+        supabase.rpc('admin_get_horario_pico'),
+        supabase.rpc('admin_get_banner_stats'),
+        supabase.rpc('admin_get_preroll_stats'),
+      ])
+      if (m.data && m.data[0]) setMetricas(m.data[0])
+      if (cp.data) setCanalesPopulares(cp.data)
+      if (hp.data) setHorarioPico(hp.data)
+      if (bs.data) setBannerStats(bs.data)
+      if (ps.data) setPrerollStats(ps.data)
+    } catch (e) {
+      console.error('Error cargando métricas:', e)
+    } finally {
+      setLoadingMetrics(false)
+    }
   }
 
   async function loadUsuarios() {
@@ -307,6 +338,24 @@ export default function AdminPanel() {
 
   const maxTop = topCanales.length > 0 ? topCanales[0][1] : 1
 
+  // ── Transforms para el dashboard de métricas (RPCs) ──
+  const M = metricas || {}
+  const metricCards = [
+    { label: 'Total usuarios', value: M.total_usuarios, icon: '👥', color: '#2D4F9F' },
+    { label: 'Usuarios activos', value: M.usuarios_activos, icon: '✅', color: '#16a34a' },
+    { label: 'Bloqueados', value: M.usuarios_bloqueados, icon: '⏱️', color: '#EF4444' },
+    { label: 'Canales activos', value: M.canales_activos, icon: '📺', color: '#F08A2E' },
+    { label: 'Sesiones hoy', value: M.sesiones_hoy, icon: '📊', color: '#9B6BAE' },
+    { label: 'Minutos vistos hoy', value: M.minutos_hoy, icon: '⏳', color: '#5BC0C4' },
+    { label: 'Viendo ahora', value: M.viendo_ahora, icon: '🔴', color: '#E9AF25' },
+  ]
+  const maxVistas = canalesPopulares.length > 0 ? Math.max(...canalesPopulares.map(c => c.total_vistas || 0), 1) : 1
+  const horasArr = Array.from({ length: 24 }, (_, h) => {
+    const f = horarioPico.find(x => x.hora === h)
+    return { hora: h, minutos: f ? (f.total_minutos || 0) : 0 }
+  })
+  const maxHora = Math.max(...horasArr.map(h => h.minutos), 1)
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       {/* Header */}
@@ -334,39 +383,45 @@ export default function AdminPanel() {
 
       <div className="max-w-5xl mx-auto p-5">
 
-        {/* ═══ DASHBOARD ═══ */}
+        {/* ═══ DASHBOARD (métricas vía RPCs) ═══ */}
         {tab === 'dashboard' && (
           <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg" style={{ color: '#2A3240' }}>Métricas</h3>
+                <p className="text-xs text-gray-400">{loadingMetrics ? 'Cargando…' : 'Datos en vivo desde Supabase · se actualiza cada 30s'}</p>
+              </div>
+              <button onClick={loadMetricas} className="text-sm font-semibold transition hover:opacity-70" style={{ color: '#2D4F9F' }}>↻ Actualizar</button>
+            </div>
+
+            {/* Cards generales — admin_get_metricas() */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Total usuarios', value: usuarios.length, icon: '👥', color: '#2D4F9F' },
-                { label: 'Usuarios activos', value: usuarios.filter(u => u.activo).length, icon: '✅', color: '#22C55E' },
-                { label: 'Canales activos', value: canales.filter(c => c.activo).length, icon: '📺', color: '#F08A2E' },
-                { label: 'Bloqueados', value: usuarios.filter(u => u.tipo_tiempo !== 'ilimitado' && u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
-              ].map((s, i) => (
+              {metricCards.map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3" style={{ background: s.color + '15' }}>{s.icon}</div>
-                  <div className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                  <div className="text-3xl font-bold" style={{ color: s.color }}>{Number(s.value || 0).toLocaleString('es-MX')}</div>
                   <div className="text-sm text-gray-500 mt-1">{s.label}</div>
                 </div>
               ))}
             </div>
 
             <div className="grid md:grid-cols-2 gap-5">
-              {/* Top 10 canales */}
+              {/* Canales populares — admin_get_canales_populares(10) */}
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <div className="font-bold text-base mb-4">Top 10 Canales más vistos</div>
-                {topCanales.length === 0
+                <div className="font-bold text-base mb-4">Canales más populares</div>
+                {canalesPopulares.length === 0
                   ? <div className="text-sm text-gray-400 py-6 text-center">Sin datos aún</div>
                   : <div className="space-y-3">
-                    {topCanales.map(([canal, mins], i) => (
-                      <div key={canal}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-gray-700 truncate mr-2">{i + 1}. {canal}</span>
-                          <span className="text-gray-400 shrink-0">{mins} min</span>
+                    {canalesPopulares.map((c, i) => (
+                      <div key={i}>
+                        <div className="flex justify-between text-sm mb-1 gap-2">
+                          <span className="font-medium text-gray-700 truncate">{i + 1}. {c.nombre || c.canal}</span>
+                          <span className="text-gray-400 shrink-0 text-xs">
+                            {Number(c.total_vistas || 0).toLocaleString('es-MX')} vistas · {c.total_minutos || 0} min · {c.usuarios_unicos || 0} 👤
+                          </span>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-2 rounded-full transition-all" style={{ width: `${(mins / maxTop) * 100}%`, background: '#2D4F9F' }} />
+                          <div className="h-2 rounded-full transition-all" style={{ width: `${((c.total_vistas || 0) / maxVistas) * 100}%`, background: '#2D4F9F' }} />
                         </div>
                       </div>
                     ))}
@@ -374,7 +429,7 @@ export default function AdminPanel() {
                 }
               </div>
 
-              {/* Viendo ahora */}
+              {/* Viendo ahora (lista en vivo) */}
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="font-bold text-base">Viendo ahora</div>
@@ -385,7 +440,7 @@ export default function AdminPanel() {
                 </div>
                 {liveViewers.length === 0
                   ? <div className="text-sm text-gray-400 py-6 text-center">Ningún usuario conectado</div>
-                  : <div className="space-y-1">
+                  : <div className="space-y-1 max-h-72 overflow-y-auto">
                     {liveViewers.map(s => (
                       <div key={s.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
                         <div>
@@ -397,6 +452,99 @@ export default function AdminPanel() {
                     ))}
                   </div>
                 }
+              </div>
+            </div>
+
+            {/* Horario pico — admin_get_horario_pico() */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div className="font-bold text-base">Horario pico</div>
+              <div className="text-xs text-gray-400 mb-4">Minutos vistos por hora del día (últimos 7 días)</div>
+              <div className="flex items-end gap-1" style={{ height: 160 }}>
+                {horasArr.map(h => (
+                  <div key={h.hora} className="flex-1 h-full flex items-end" title={`${h.hora}:00 — ${h.minutos} min`}>
+                    <div className="w-full rounded-t transition-all"
+                      style={{
+                        height: `${(h.minutos / maxHora) * 100}%`,
+                        minHeight: h.minutos > 0 ? 4 : 0,
+                        background: (h.minutos === maxHora && maxHora > 1) ? '#E9AF25' : '#2D4F9F',
+                      }} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between text-2xs text-gray-300 mt-2">
+                <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+              </div>
+            </div>
+
+            {/* Rendimiento de banners — admin_get_banner_stats() */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 font-bold text-base">Rendimiento de banners</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                      <th className="text-left px-4 py-3">Título</th>
+                      <th className="text-left px-4 py-3">Posición</th>
+                      <th className="text-right px-4 py-3">Vistas</th>
+                      <th className="text-right px-4 py-3">Clics</th>
+                      <th className="text-right px-4 py-3">CTR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bannerStats.map(b => {
+                      const v = b.view_count || 0, c = b.click_count || 0
+                      const ctr = v > 0 ? (c / v * 100).toFixed(1) : '0.0'
+                      return (
+                        <tr key={b.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                          <td className="px-4 py-3 font-medium">{b.titulo || 'Sin título'}</td>
+                          <td className="px-4 py-3"><span className="font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-xs">{b.posicion}</span></td>
+                          <td className="px-4 py-3 text-right">{v.toLocaleString('es-MX')}</td>
+                          <td className="px-4 py-3 text-right">{c.toLocaleString('es-MX')}</td>
+                          <td className="px-4 py-3 text-right font-semibold" style={{ color: '#2D4F9F' }}>{ctr}%</td>
+                        </tr>
+                      )
+                    })}
+                    {bannerStats.length === 0 && (
+                      <tr><td colSpan={5} className="py-8 text-center text-gray-400">Sin datos de banners</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rendimiento de preroll — admin_get_preroll_stats() */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 font-bold text-base">Rendimiento de preroll</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                      <th className="text-left px-4 py-3">Título</th>
+                      <th className="text-right px-4 py-3">Vistas</th>
+                      <th className="text-right px-4 py-3">Completados</th>
+                      <th className="text-right px-4 py-3">Saltados</th>
+                      <th className="text-right px-4 py-3">Completación</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prerollStats.map(p => {
+                      const v = p.view_count || 0, comp = p.complete_count || 0, sk = p.skip_count || 0
+                      const rate = v > 0 ? (comp / v * 100).toFixed(1) : '0.0'
+                      return (
+                        <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                          <td className="px-4 py-3 font-medium">{p.titulo || 'Sin título'}</td>
+                          <td className="px-4 py-3 text-right">{v.toLocaleString('es-MX')}</td>
+                          <td className="px-4 py-3 text-right">{comp.toLocaleString('es-MX')}</td>
+                          <td className="px-4 py-3 text-right">{sk.toLocaleString('es-MX')}</td>
+                          <td className="px-4 py-3 text-right font-semibold" style={{ color: '#16a34a' }}>{rate}%</td>
+                        </tr>
+                      )
+                    })}
+                    {prerollStats.length === 0 && (
+                      <tr><td colSpan={5} className="py-8 text-center text-gray-400">Sin datos de preroll</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

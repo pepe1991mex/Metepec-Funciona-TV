@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
 
 export default function BannerCarousel({ banners, height = 'auto', className = '' }) {
   const [current, setCurrent] = useState(0)
+  // IDs de banners cuya impresión ya se contó en esta sesión de vista (evita duplicados por render)
+  const viewedRef = useRef(new Set())
 
   useEffect(() => {
     if (banners.length <= 1) return
@@ -11,9 +14,25 @@ export default function BannerCarousel({ banners, height = 'auto', className = '
     return () => clearInterval(iv)
   }, [banners.length])
 
+  // Métrica: registrar impresión del banner visible (una vez por banner por sesión de vista)
+  const currentBannerId = (banners && banners.length > 0 && banners[current]) ? banners[current].id : null
+  useEffect(() => {
+    if (!currentBannerId) return
+    if (viewedRef.current.has(currentBannerId)) return
+    viewedRef.current.add(currentBannerId)
+    supabase.rpc('registrar_vista_banner', { p_banner_id: currentBannerId }).then(() => {}).catch(() => {})
+  }, [currentBannerId])
+
   if (!banners || banners.length === 0) return null
 
   const banner = banners[current]
+
+  // Métrica: registrar clic del banner (fire-and-forget, antes de abrir el enlace)
+  function handleBannerClick() {
+    if (banner.id) {
+      supabase.rpc('registrar_click_banner', { p_banner_id: banner.id }).then(() => {}).catch(() => {})
+    }
+  }
 
   const content = (
     <div className={`relative overflow-hidden rounded-xl ${className}`}
@@ -50,7 +69,7 @@ export default function BannerCarousel({ banners, height = 'auto', className = '
 
   if (banner.enlace) {
     return (
-      <a href={banner.enlace} target="_blank" rel="noopener noreferrer" className="block">
+      <a href={banner.enlace} target="_blank" rel="noopener noreferrer" className="block" onClick={handleBannerClick}>
         {content}
       </a>
     )

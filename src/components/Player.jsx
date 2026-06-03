@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import Hls from 'hls.js'
+import { supabase } from '../lib/supabase'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Player de Metepec Funciona TV
@@ -230,6 +231,12 @@ export default function Player({ channel, url, onBack, getRandomVideo }) {
     }
   }
 
+  // Métrica de preroll (fire-and-forget): p_evento = 'view' | 'skip' | 'complete'
+  function trackPreroll(evento, id) {
+    if (!id) return
+    supabase.rpc('registrar_evento_preroll', { p_preroll_id: id, p_evento: evento }).then(() => {}).catch(() => {})
+  }
+
   // ── Preroll de Metepec (autoplay Safari/iOS-safe: arranca mudo, desmutea a los 300ms) ──
   function playPreroll() {
     const ad = adVideoRef.current
@@ -260,6 +267,7 @@ export default function Player({ channel, url, onBack, getRandomVideo }) {
     if (ad) {
       setPrerollVideo(ad)
       setShowingPreroll(true)
+      trackPreroll('view', ad.id)
     } else {
       setShowingPreroll(false)
       setPrerollVideo(null)
@@ -304,6 +312,7 @@ export default function Player({ channel, url, onBack, getRandomVideo }) {
 
   function skipPreroll() {
     if (!prerollSkippable) return
+    if (prerollVideo) trackPreroll('skip', prerollVideo.id)
     if (adVideoRef.current) { adVideoRef.current.pause(); adVideoRef.current.src = '' }
     setShowingPreroll(false)
     setPrerollVideo(null)
@@ -312,6 +321,7 @@ export default function Player({ channel, url, onBack, getRandomVideo }) {
   }
 
   function onPrerollEnded() {
+    if (prerollVideo) trackPreroll('complete', prerollVideo.id)
     setShowingPreroll(false)
     setPrerollVideo(null)
     setAdBlocked(false)
