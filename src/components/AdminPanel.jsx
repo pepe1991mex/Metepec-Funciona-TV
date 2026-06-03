@@ -14,7 +14,9 @@ const TIPO_LABELS = {
 export default function AdminPanel() {
   const [auth, setAuth] = useState(false)
   const [pw, setPw] = useState('')
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab] = useState('metricas')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(null)
 
   const [usuarios, setUsuarios] = useState([])
   const [canales, setCanales] = useState([])
@@ -59,7 +61,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     if (!auth) return
-    if (tab === 'reportes') loadSesiones()
+    if (tab === 'metricas') loadSesiones()
     if (tab === 'preroll') loadCanalesDisponibles()
   }, [auth, tab])
 
@@ -83,6 +85,7 @@ export default function AdminPanel() {
       if (hp.data) setHorarioPico(hp.data)
       if (bs.data) setBannerStats(bs.data)
       if (ps.data) setPrerollStats(ps.data)
+      setLastRefresh(new Date())
     } catch (e) {
       console.error('Error cargando métricas:', e)
     } finally {
@@ -324,13 +327,13 @@ export default function AdminPanel() {
   }
 
   const TABS = [
-    { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-    { id: 'usuarios',  label: 'Usuarios',  icon: '👥' },
-    { id: 'canales',   label: 'Canales',   icon: '📺' },
-    { id: 'publicidad',label: 'Publicidad',icon: '📢' },
-    { id: 'preroll',   label: 'Preroll',   icon: '🎬' },
-    { id: 'reportes',  label: 'Reportes',  icon: '📊' },
+    { id: 'canales',   label: 'Canales',  icon: '📺' },
+    { id: 'publicidad',label: 'Banners',  icon: '🖼️' },
+    { id: 'preroll',   label: 'Pre-Roll', icon: '🎬' },
+    { id: 'usuarios',  label: 'Usuarios', icon: '👥' },
+    { id: 'metricas',  label: 'Métricas', icon: '📊' },
   ]
+  function handleTabClick(id) { setTab(id); setSidebarOpen(false) }
 
   const filteredUsers = search
     ? usuarios.filter(u => (u.nombre || '').toLowerCase().includes(search.toLowerCase()) || u.telefono.includes(search))
@@ -356,98 +359,169 @@ export default function AdminPanel() {
   })
   const maxHora = Math.max(...horasArr.map(h => h.minutos), 1)
 
+  // Totales para las stats rápidas del sidebar y el resumen de publicidad
+  const totalBannerViews = bannerStats.reduce((s, b) => s + (b.view_count || 0), 0)
+  const totalBannerClicks = bannerStats.reduce((s, b) => s + (b.click_count || 0), 0)
+  const totalPrerollViews = prerollStats.reduce((s, p) => s + (p.view_count || 0), 0)
+  const totalPrerollComplete = prerollStats.reduce((s, p) => s + (p.complete_count || 0), 0)
+  const bannersActivos = banners.filter(b => b.activo).length
+  const prerollsActivos = prerolls.filter(p => p.activo).length
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="flex items-center gap-3">
-          <img src="/logos/escudo.png" alt="Escudo" className="h-9 object-contain" />
-          <div>
-            <div className="font-bold text-base text-gray-800">Admin — Metepec Funciona TV</div>
-            <div className="text-xs text-gray-400">Panel de administración</div>
+    <div className="min-h-screen" style={{ background: '#F4F8FD', color: '#2A3240' }}>
+      {/* Header móvil */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b flex items-center px-4 gap-3 z-30" style={{ borderColor: '#E4E9F0' }}>
+        <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100" style={{ color: '#2A3240' }} aria-label="Abrir menú">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <img src="/logos/escudo.png" alt="Metepec" className="h-8 object-contain" />
+        <span className="font-black text-sm tracking-tight" style={{ color: '#2A3240' }}>Panel Admin</span>
+      </header>
+
+      {/* Overlay del drawer en móvil */}
+      {sidebarOpen && <div className="md:hidden fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Sidebar */}
+      <aside className={'fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col transition-transform duration-300 md:translate-x-0 ' + (sidebarOpen ? 'translate-x-0' : '-translate-x-full')} style={{ borderColor: '#E4E9F0' }}>
+        {/* Logo + título */}
+        <div className="p-4 border-b" style={{ borderColor: '#E4E9F0' }}>
+          <div className="flex items-center gap-2.5">
+            <img src="/logos/escudo.png" alt="Metepec" className="h-10 object-contain" />
+            <div>
+              <div className="font-black text-sm tracking-tight leading-tight" style={{ color: '#2A3240' }}>Metepec Funciona TV</div>
+              <div className="text-2xs uppercase tracking-wider font-semibold" style={{ color: '#8D96A5' }}>Panel Admin</div>
+            </div>
           </div>
         </div>
-        <a href="/" className="text-sm text-gray-400 hover:text-gray-600 transition">← Volver a la app</a>
-      </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-4 flex gap-0 overflow-x-auto">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className="px-5 py-3 text-sm font-medium whitespace-nowrap transition border-b-2 -mb-px"
-            style={{ borderColor: tab === t.id ? '#2D4F9F' : 'transparent', color: tab === t.id ? '#2D4F9F' : '#9ca3af' }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
+        {/* Stats rápidas 2x2 */}
+        <div className="p-4 border-b" style={{ borderColor: '#E4E9F0' }}>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg p-2 text-center" style={{ background: '#F4F8FD' }}>
+              <p className="text-lg font-bold" style={{ color: '#2A3240' }}>{Number(M.total_usuarios || 0).toLocaleString('es-MX')}</p>
+              <p className="text-2xs" style={{ color: '#8D96A5' }}>Usuarios</p>
+              <p className="text-2xs font-semibold" style={{ color: '#E9AF25' }}>{M.usuarios_activos || 0} activos</p>
+            </div>
+            <div className="rounded-lg p-2 text-center" style={{ background: '#F4F8FD' }}>
+              <p className="text-lg font-bold" style={{ color: '#2A3240' }}>{M.canales_activos || 0}</p>
+              <p className="text-2xs" style={{ color: '#8D96A5' }}>Canales</p>
+            </div>
+            <div className="rounded-lg p-2 text-center" style={{ background: '#F4F8FD' }}>
+              <p className="text-lg font-bold" style={{ color: '#2A3240' }}>{bannersActivos}</p>
+              <p className="text-2xs" style={{ color: '#8D96A5' }}>Banners</p>
+              <p className="text-2xs font-semibold" style={{ color: '#2D4F9F' }}>{totalBannerViews.toLocaleString('es-MX')} views</p>
+            </div>
+            <div className="rounded-lg p-2 text-center" style={{ background: '#F4F8FD' }}>
+              <p className="text-lg font-bold" style={{ color: '#2A3240' }}>{prerollsActivos}</p>
+              <p className="text-2xs" style={{ color: '#8D96A5' }}>Pre-Rolls</p>
+              <p className="text-2xs font-semibold" style={{ color: '#2D4F9F' }}>{totalPrerollViews.toLocaleString('es-MX')} views</p>
+            </div>
+          </div>
+          <p className="text-2xs text-center mt-2" style={{ color: '#B6BECB' }}>
+            {lastRefresh ? ('Actualizado: ' + lastRefresh.toLocaleTimeString('es-MX')) : 'Cargando…'}
+          </p>
+        </div>
 
-      <div className="max-w-5xl mx-auto p-5">
+        {/* Navegación */}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => handleTabClick(t.id)}
+              className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 border"
+              style={tab === t.id
+                ? { background: 'rgba(45,79,159,0.10)', color: '#2D4F9F', borderColor: 'rgba(45,79,159,0.22)' }
+                : { background: 'transparent', color: '#8D96A5', borderColor: 'transparent' }}>
+              <span>{t.icon}</span>{t.label}
+            </button>
+          ))}
+        </nav>
 
-        {/* ═══ DASHBOARD (métricas vía RPCs) ═══ */}
-        {tab === 'dashboard' && (
+        {/* Footer */}
+        <div className="p-4 border-t space-y-1" style={{ borderColor: '#E4E9F0' }}>
+          <a href="/" className="block w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-gray-50 transition" style={{ color: '#8D96A5' }}>← Ver App</a>
+          <button onClick={() => { setAuth(false); setSidebarOpen(false) }} className="w-full text-left px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 transition">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="md:ml-64 px-4 pb-10 pt-16 md:p-8">
+        <div className="max-w-5xl mx-auto">
+
+        {/* ═══ MÉTRICAS (RPCs) ═══ */}
+        {tab === 'metricas' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-lg" style={{ color: '#2A3240' }}>Métricas</h3>
-                <p className="text-xs text-gray-400">{loadingMetrics ? 'Cargando…' : 'Datos en vivo desde Supabase · se actualiza cada 30s'}</p>
+                <h2 className="font-black text-2xl tracking-tight" style={{ color: '#2A3240' }}>Métricas</h2>
+                <p className="text-xs" style={{ color: '#8D96A5' }}>{loadingMetrics ? 'Cargando…' : 'En vivo desde Supabase · auto cada 30s'}</p>
               </div>
-              <button onClick={loadMetricas} className="text-sm font-semibold transition hover:opacity-70" style={{ color: '#2D4F9F' }}>↻ Actualizar</button>
+              <button onClick={loadMetricas} className="text-sm font-bold transition hover:opacity-70" style={{ color: '#2D4F9F' }}>↻ Actualizar</button>
             </div>
 
             {/* Cards generales — admin_get_metricas() */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metricCards.map((s, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+                <div key={i} className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: '#E4E9F0' }}>
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3" style={{ background: s.color + '15' }}>{s.icon}</div>
-                  <div className="text-3xl font-bold" style={{ color: s.color }}>{Number(s.value || 0).toLocaleString('es-MX')}</div>
-                  <div className="text-sm text-gray-500 mt-1">{s.label}</div>
+                  <div className="text-3xl font-black" style={{ color: s.color }}>{Number(s.value || 0).toLocaleString('es-MX')}</div>
+                  <div className="text-sm mt-1" style={{ color: '#8D96A5' }}>{s.label}</div>
                 </div>
               ))}
             </div>
 
             <div className="grid md:grid-cols-2 gap-5">
-              {/* Canales populares — admin_get_canales_populares(10) */}
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <div className="font-bold text-base mb-4">Canales más populares</div>
+              {/* 🏆 Canales más vistos — admin_get_canales_populares(10) */}
+              <div className="bg-white rounded-2xl border shadow-sm p-5" style={{ borderColor: '#E4E9F0' }}>
+                <div className="font-black text-base mb-4" style={{ color: '#2A3240' }}>🏆 Canales más vistos</div>
                 {canalesPopulares.length === 0
-                  ? <div className="text-sm text-gray-400 py-6 text-center">Sin datos aún</div>
+                  ? <div className="text-sm py-6 text-center" style={{ color: '#8D96A5' }}>Sin datos aún</div>
                   : <div className="space-y-3">
-                    {canalesPopulares.map((c, i) => (
-                      <div key={i}>
-                        <div className="flex justify-between text-sm mb-1 gap-2">
-                          <span className="font-medium text-gray-700 truncate">{i + 1}. {c.nombre || c.canal}</span>
-                          <span className="text-gray-400 shrink-0 text-xs">
-                            {Number(c.total_vistas || 0).toLocaleString('es-MX')} vistas · {c.total_minutos || 0} min · {c.usuarios_unicos || 0} 👤
-                          </span>
+                    {canalesPopulares.map((c, i) => {
+                      const medal = i === 0 ? '#E9AF25' : i === 1 ? '#9CA3AF' : i === 2 ? '#F08A2E' : null
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                            style={medal ? { background: medal, color: 'white' } : { background: '#F4F8FD', color: '#8D96A5' }}>
+                            {i + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between text-sm mb-1 gap-2">
+                              <span className="font-semibold truncate" style={{ color: '#2A3240' }}>{c.nombre || c.canal}</span>
+                              <span className="shrink-0 text-2xs" style={{ color: '#8D96A5' }}>
+                                {Number(c.total_vistas || 0).toLocaleString('es-MX')} vistas · {c.total_minutos || 0} min · {c.usuarios_unicos || 0}👤
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ background: '#F4F8FD' }}>
+                              <div className="h-2 rounded-full transition-all" style={{ width: `${((c.total_vistas || 0) / maxVistas) * 100}%`, background: medal || '#2D4F9F' }} />
+                            </div>
+                          </div>
                         </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-2 rounded-full transition-all" style={{ width: `${((c.total_vistas || 0) / maxVistas) * 100}%`, background: '#2D4F9F' }} />
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 }
               </div>
 
               {/* Viendo ahora (lista en vivo) */}
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div className="bg-white rounded-2xl border shadow-sm p-5" style={{ borderColor: '#E4E9F0' }}>
                 <div className="flex items-center justify-between mb-4">
-                  <div className="font-bold text-base">Viendo ahora</div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-sm text-gray-400">{liveViewers.length} activos</span>
+                  <div className="font-black text-base" style={{ color: '#2A3240' }}>Viendo ahora</div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: '#E9AF2518' }}>
+                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#E9AF25' }} />
+                    <span className="text-xs font-bold" style={{ color: '#E9AF25' }}>{liveViewers.length} activos</span>
                   </div>
                 </div>
                 {liveViewers.length === 0
-                  ? <div className="text-sm text-gray-400 py-6 text-center">Ningún usuario conectado</div>
+                  ? <div className="text-sm py-6 text-center" style={{ color: '#8D96A5' }}>Ningún usuario conectado</div>
                   : <div className="space-y-1 max-h-72 overflow-y-auto">
                     {liveViewers.map(s => (
-                      <div key={s.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                      <div key={s.id} className="flex items-center justify-between py-2.5 border-b last:border-0" style={{ borderColor: '#F4F8FD' }}>
                         <div>
-                          <div className="text-sm font-medium">{s.usuarios?.nombre || 'Sin nombre'}</div>
-                          <div className="text-xs text-gray-400">{s.usuarios?.telefono}</div>
+                          <div className="text-sm font-medium" style={{ color: '#2A3240' }}>{s.usuarios?.nombre || 'Sin nombre'}</div>
+                          <div className="text-xs" style={{ color: '#8D96A5' }}>{s.usuarios?.telefono}</div>
                         </div>
-                        <span className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full font-medium">{s.canal}</span>
+                        <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(45,79,159,0.10)', color: '#2D4F9F' }}>{s.canal}</span>
                       </div>
                     ))}
                   </div>
@@ -455,93 +529,134 @@ export default function AdminPanel() {
               </div>
             </div>
 
-            {/* Horario pico — admin_get_horario_pico() */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <div className="font-bold text-base">Horario pico</div>
-              <div className="text-xs text-gray-400 mb-4">Minutos vistos por hora del día (últimos 7 días)</div>
-              <div className="flex items-end gap-1" style={{ height: 160 }}>
-                {horasArr.map(h => (
-                  <div key={h.hora} className="flex-1 h-full flex items-end" title={`${h.hora}:00 — ${h.minutos} min`}>
-                    <div className="w-full rounded-t transition-all"
-                      style={{
-                        height: `${(h.minutos / maxHora) * 100}%`,
-                        minHeight: h.minutos > 0 ? 4 : 0,
-                        background: (h.minutos === maxHora && maxHora > 1) ? '#E9AF25' : '#2D4F9F',
-                      }} />
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between text-2xs text-gray-300 mt-2">
-                <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+            {/* ⏰ Horario de audiencia — admin_get_horario_pico() (barras horizontales) */}
+            <div className="bg-white rounded-2xl border shadow-sm p-5" style={{ borderColor: '#E4E9F0' }}>
+              <div className="font-black text-base" style={{ color: '#2A3240' }}>⏰ Horario de audiencia</div>
+              <div className="text-xs mb-4" style={{ color: '#8D96A5' }}>Minutos vistos por hora del día (últimos 7 días)</div>
+              <div className="space-y-1">
+                {horasArr.map(h => {
+                  const isPeak = h.minutos === maxHora && maxHora > 1
+                  return (
+                    <div key={h.hora} className="flex items-center gap-2">
+                      <span className="text-2xs font-mono w-10 text-right shrink-0" style={{ color: isPeak ? '#E9AF25' : '#8D96A5' }}>
+                        {String(h.hora).padStart(2, '0')}:00
+                      </span>
+                      <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: '#F4F8FD' }}>
+                        <div className="h-3 rounded-full transition-all" style={{ width: `${(h.minutos / maxHora) * 100}%`, minWidth: h.minutos > 0 ? 6 : 0, background: isPeak ? '#E9AF25' : '#2D4F9F' }} />
+                      </div>
+                      <span className="text-2xs w-14 shrink-0 text-right" style={{ color: isPeak ? '#E9AF25' : '#8D96A5', fontWeight: isPeak ? 700 : 400 }}>{h.minutos} min</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
-            {/* Rendimiento de banners — admin_get_banner_stats() */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 font-bold text-base">Rendimiento de banners</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                      <th className="text-left px-4 py-3">Título</th>
-                      <th className="text-left px-4 py-3">Posición</th>
-                      <th className="text-right px-4 py-3">Vistas</th>
-                      <th className="text-right px-4 py-3">Clics</th>
-                      <th className="text-right px-4 py-3">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+            {/* 📢 Resumen de Publicidad — admin_get_banner_stats() / admin_get_preroll_stats() */}
+            <div>
+              <div className="font-black text-base mb-3" style={{ color: '#2A3240' }}>📢 Resumen de Publicidad</div>
+              <div className="grid md:grid-cols-2 gap-5">
+                {/* Banners */}
+                <div className="bg-white rounded-2xl border shadow-sm p-5" style={{ borderColor: '#E4E9F0' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="font-bold text-sm" style={{ color: '#2A3240' }}>🖼️ Banners</span>
+                    <span className="text-2xs" style={{ color: '#8D96A5' }}>{bannerStats.length} registrados</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="rounded-xl p-3 text-center" style={{ background: '#F4F8FD' }}>
+                      <div className="text-2xl font-black" style={{ color: '#2D4F9F' }}>{totalBannerViews.toLocaleString('es-MX')}</div>
+                      <div className="text-2xs" style={{ color: '#8D96A5' }}>👁️ Impresiones</div>
+                    </div>
+                    <div className="rounded-xl p-3 text-center" style={{ background: '#F4F8FD' }}>
+                      <div className="text-2xl font-black" style={{ color: '#E9AF25' }}>{totalBannerClicks.toLocaleString('es-MX')}</div>
+                      <div className="text-2xs" style={{ color: '#8D96A5' }}>🖱️ Clics</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
                     {bannerStats.map(b => {
                       const v = b.view_count || 0, c = b.click_count || 0
                       const ctr = v > 0 ? (c / v * 100).toFixed(1) : '0.0'
                       return (
-                        <tr key={b.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                          <td className="px-4 py-3 font-medium">{b.titulo || 'Sin título'}</td>
-                          <td className="px-4 py-3"><span className="font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-xs">{b.posicion}</span></td>
-                          <td className="px-4 py-3 text-right">{v.toLocaleString('es-MX')}</td>
-                          <td className="px-4 py-3 text-right">{c.toLocaleString('es-MX')}</td>
-                          <td className="px-4 py-3 text-right font-semibold" style={{ color: '#2D4F9F' }}>{ctr}%</td>
-                        </tr>
+                        <div key={b.id} className="flex items-center justify-between text-xs gap-2">
+                          <span className="truncate" style={{ color: '#2A3240' }}>{b.titulo || 'Sin título'} <span style={{ color: '#B6BECB' }}>· {b.posicion}</span></span>
+                          <span className="shrink-0" style={{ color: '#8D96A5' }}>{v.toLocaleString('es-MX')}👁 · {c}🖱 · <span style={{ color: '#2D4F9F', fontWeight: 600 }}>{ctr}%</span></span>
+                        </div>
                       )
                     })}
-                    {bannerStats.length === 0 && (
-                      <tr><td colSpan={5} className="py-8 text-center text-gray-400">Sin datos de banners</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    {bannerStats.length === 0 && <div className="text-2xs text-center py-2" style={{ color: '#8D96A5' }}>Sin datos</div>}
+                  </div>
+                </div>
 
-            {/* Rendimiento de preroll — admin_get_preroll_stats() */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 font-bold text-base">Rendimiento de preroll</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                      <th className="text-left px-4 py-3">Título</th>
-                      <th className="text-right px-4 py-3">Vistas</th>
-                      <th className="text-right px-4 py-3">Completados</th>
-                      <th className="text-right px-4 py-3">Saltados</th>
-                      <th className="text-right px-4 py-3">Completación</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                {/* Preroll */}
+                <div className="bg-white rounded-2xl border shadow-sm p-5" style={{ borderColor: '#E4E9F0' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="font-bold text-sm" style={{ color: '#2A3240' }}>🎬 Pre-Roll</span>
+                    <span className="text-2xs" style={{ color: '#8D96A5' }}>{prerollStats.length} registrados</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="rounded-xl p-3 text-center" style={{ background: '#F4F8FD' }}>
+                      <div className="text-2xl font-black" style={{ color: '#2D4F9F' }}>{totalPrerollViews.toLocaleString('es-MX')}</div>
+                      <div className="text-2xs" style={{ color: '#8D96A5' }}>▶️ Reproducciones</div>
+                    </div>
+                    <div className="rounded-xl p-3 text-center" style={{ background: '#F4F8FD' }}>
+                      <div className="text-2xl font-black" style={{ color: '#16a34a' }}>{totalPrerollComplete.toLocaleString('es-MX')}</div>
+                      <div className="text-2xs" style={{ color: '#8D96A5' }}>✅ Completados</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
                     {prerollStats.map(p => {
                       const v = p.view_count || 0, comp = p.complete_count || 0, sk = p.skip_count || 0
                       const rate = v > 0 ? (comp / v * 100).toFixed(1) : '0.0'
                       return (
-                        <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                          <td className="px-4 py-3 font-medium">{p.titulo || 'Sin título'}</td>
-                          <td className="px-4 py-3 text-right">{v.toLocaleString('es-MX')}</td>
-                          <td className="px-4 py-3 text-right">{comp.toLocaleString('es-MX')}</td>
-                          <td className="px-4 py-3 text-right">{sk.toLocaleString('es-MX')}</td>
-                          <td className="px-4 py-3 text-right font-semibold" style={{ color: '#16a34a' }}>{rate}%</td>
-                        </tr>
+                        <div key={p.id} className="flex items-center justify-between text-xs gap-2">
+                          <span className="truncate" style={{ color: '#2A3240' }}>{p.titulo || 'Sin título'}</span>
+                          <span className="shrink-0" style={{ color: '#8D96A5' }}>{v.toLocaleString('es-MX')}▶ · {sk}⏭ · <span style={{ color: '#16a34a', fontWeight: 600 }}>{rate}%</span></span>
+                        </div>
                       )
                     })}
-                    {prerollStats.length === 0 && (
-                      <tr><td colSpan={5} className="py-8 text-center text-gray-400">Sin datos de preroll</td></tr>
+                    {prerollStats.length === 0 && <div className="text-2xs text-center py-2" style={{ color: '#8D96A5' }}>Sin datos</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sesiones recientes (últimas 50) */}
+            <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#E4E9F0' }}>
+              <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: '#E4E9F0' }}>
+                <div className="font-black text-base" style={{ color: '#2A3240' }}>Sesiones recientes</div>
+                <button onClick={loadSesiones} className="text-sm font-semibold transition hover:opacity-70" style={{ color: '#2D4F9F' }}>↻ Actualizar</button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b font-semibold" style={{ background: '#F4F8FD', borderColor: '#E4E9F0', color: '#8D96A5' }}>
+                      <th className="text-left px-4 py-3">Usuario</th>
+                      <th className="text-left px-4 py-3">Canal</th>
+                      <th className="text-left px-4 py-3">Inicio</th>
+                      <th className="text-left px-4 py-3">Fin</th>
+                      <th className="text-left px-4 py-3">Min</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sesiones.map(s => (
+                      <tr key={s.id} className="border-b last:border-0" style={{ borderColor: '#F4F8FD' }}>
+                        <td className="px-4 py-4">
+                          <div className="font-medium" style={{ color: '#2A3240' }}>{s.usuarios?.nombre || 'Sin nombre'}</div>
+                          <div className="text-xs" style={{ color: '#8D96A5' }}>{s.usuarios?.telefono}</div>
+                        </td>
+                        <td className="px-4 py-4" style={{ color: '#5A6577' }}>{s.canal}</td>
+                        <td className="px-4 py-4 text-xs" style={{ color: '#8D96A5' }}>
+                          {s.inicio ? new Date(s.inicio).toLocaleString('es-MX') : '—'}
+                        </td>
+                        <td className="px-4 py-4 text-xs">
+                          {s.fin
+                            ? <span style={{ color: '#8D96A5' }}>{new Date(s.fin).toLocaleString('es-MX')}</span>
+                            : <span className="font-semibold" style={{ color: '#16a34a' }}>En vivo</span>}
+                        </td>
+                        <td className="px-4 py-4" style={{ color: '#5A6577' }}>{s.minutos}</td>
+                      </tr>
+                    ))}
+                    {sesiones.length === 0 && (
+                      <tr><td colSpan={5} className="py-10 text-center" style={{ color: '#8D96A5' }}>Sin sesiones registradas</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1155,69 +1270,8 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* ═══ REPORTES ═══ */}
-        {tab === 'reportes' && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Total usuarios', value: usuarios.length, icon: '👥', color: '#2D4F9F' },
-                { label: 'Usuarios activos', value: usuarios.filter(u => u.activo).length, icon: '✅', color: '#22C55E' },
-                { label: 'Canales activos', value: canales.filter(c => c.activo).length, icon: '📺', color: '#F08A2E' },
-                { label: 'Bloqueados', value: usuarios.filter(u => u.tipo_tiempo !== 'ilimitado' && u.minutos_consumidos >= u.minutos_limite).length, icon: '⏱️', color: '#EF4444' },
-              ].map((s, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3" style={{ background: s.color + '15' }}>{s.icon}</div>
-                  <div className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</div>
-                  <div className="text-sm text-gray-500 mt-1">{s.label}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <div className="font-bold text-base">Sesiones recientes (últimas 50)</div>
-                <button onClick={loadSesiones} className="text-sm text-blue-500 hover:text-blue-700 transition">↻ Actualizar</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                      <th className="text-left px-4 py-3">Usuario</th>
-                      <th className="text-left px-4 py-3">Canal</th>
-                      <th className="text-left px-4 py-3">Inicio</th>
-                      <th className="text-left px-4 py-3">Fin</th>
-                      <th className="text-left px-4 py-3">Min</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sesiones.map(s => (
-                      <tr key={s.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                        <td className="px-4 py-4">
-                          <div className="font-medium">{s.usuarios?.nombre || 'Sin nombre'}</div>
-                          <div className="text-xs text-gray-400">{s.usuarios?.telefono}</div>
-                        </td>
-                        <td className="px-4 py-4 text-gray-600">{s.canal}</td>
-                        <td className="px-4 py-4 text-xs text-gray-400">
-                          {s.inicio ? new Date(s.inicio).toLocaleString('es-MX') : '—'}
-                        </td>
-                        <td className="px-4 py-4 text-xs">
-                          {s.fin
-                            ? <span className="text-gray-400">{new Date(s.fin).toLocaleString('es-MX')}</span>
-                            : <span className="text-green-500 font-semibold">En vivo</span>}
-                        </td>
-                        <td className="px-4 py-4 text-gray-600">{s.minutos}</td>
-                      </tr>
-                    ))}
-                    {sesiones.length === 0 && (
-                      <tr><td colSpan={5} className="py-10 text-center text-gray-400">Sin sesiones registradas</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   )
 }
