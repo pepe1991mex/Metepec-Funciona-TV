@@ -36,6 +36,7 @@ const ALLOWED_ORIGINS = [
   "https://www.metepec-funciona-tv.com",
   "https://metepec-funciona-tv.vercel.app",
   "https://tv.metepec-wifi.lat",
+  "https://tvadmin.metepec-wifi.lat",
   "http://localhost:5173",
   "http://localhost:5174",
 ];
