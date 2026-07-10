@@ -63,12 +63,14 @@ export default function Player({ channel, url, onBack, getRandomVideo }) {
   }
 
   // ── Motor de reproducción (portado de BAIT TV) ──
-  // Fuente: la URL tokenizada (prop url) si viene, si no la del canal directo.
+  // Fuente: SIEMPRE la prop url (HomeView pasa la tokenizada para canales VPS y la
+  // directa para abiertos). Sin url NO se arranca: pedir al cache sin token da 403.
   function initStream() {
+    if (!url) return
     setError('')
     var video = videoRef.current
-    var src = url || (channel && channel.url_hls)
-    if (!video || !src) return
+    var src = url
+    if (!video) return
     setIsLoading(true)
 
     cleanupStream()

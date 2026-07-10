@@ -17,7 +17,6 @@ export function useStreamToken(canal, usuarioId, sessionToken, streamUri) {
     if (!canal || !usuarioId || !sessionToken || !streamUri) return;
 
     var currentVersion = ++fetchVersion.current;
-    setTokenData(null);
     setLoading(true);
     setError(null);
 
@@ -66,6 +65,10 @@ export function useStreamToken(canal, usuarioId, sessionToken, streamUri) {
   }, [canal, usuarioId, sessionToken, streamUri]);
 
   useEffect(function () {
+    // Al cambiar canal/usuario/uri el token anterior ya no aplica: limpiar antes de
+    // pedir el nuevo. En renovaciones y refresh manual (mismo canal) NO se limpia:
+    // se conserva la URL vigente para que el Player siga montado sin repetir preroll.
+    setTokenData(null);
     fetchToken();
     return function () {
       if (renewalTimer.current) clearTimeout(renewalTimer.current);

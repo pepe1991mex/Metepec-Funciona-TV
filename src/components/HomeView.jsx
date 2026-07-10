@@ -106,7 +106,11 @@ export default function HomeView({ usuario, onLogout }) {
     usuario && usuario.session_token ? usuario.session_token : null,
     streamInfo ? streamInfo.uri : null
   )
-  const playerUrl = !selected ? '' : (!streamInfo ? selected.url_hls : (tokenResult.streamUrl || selected.url_hls))
+  const playerUrl = !selected
+    ? ''
+    : (!streamInfo
+       ? selected.url_hls                  // canal abierto (mdstrm/akamai/streamlock): directo
+       : (tokenResult.streamUrl || ''))    // canal VPS: SOLO la tokenizada, nunca la cruda (el cache responde 403)
 
   async function closeActiveSession() {
     if (!sessionRef.current) return
@@ -376,15 +380,24 @@ export default function HomeView({ usuario, onLogout }) {
                   </div>
                 )}
 
-                {/* Estado de carga mientras se genera el token VPS */}
-                {streamInfo && tokenResult.loading && !tokenResult.error && (
-                  <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-100 text-xs rounded-xl px-3 py-2" style={{ color: '#2D4F9F' }}>
-                    <span className="inline-block animate-spin">⏳</span>
-                    Asegurando transmisión…
+                {/* El Player solo se monta con URL lista (tokenizada si el canal es VPS).
+                    Mientras el token está en vuelo se muestra un placeholder 16/9: así
+                    nunca se dispara una petición al cache sin token (403). */}
+                {playerUrl ? (
+                  <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-2xl overflow-hidden shadow-lg"
+                    style={{ aspectRatio: '16/9', background: '#101B38' }}>
+                    {tokenResult.error ? (
+                      <p className="text-white/60 text-xs font-medium">Transmisión no disponible</p>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 border-[3px] border-white/20 rounded-full animate-spin" style={{ borderTopColor: '#2D4F9F' }}></div>
+                        <p className="text-white/80 text-xs mt-3 font-medium">Asegurando transmisión…</p>
+                      </>
+                    )}
                   </div>
                 )}
-
-                <Player channel={selected} url={playerUrl} onBack={handleBack} getRandomVideo={getRandomVideo} />
               </div>
             </div>
 
